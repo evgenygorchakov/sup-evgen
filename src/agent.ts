@@ -4,8 +4,10 @@ import type { Message, Tool, ToolCall, ToolDefinition } from "./types.ts";
 import { chat } from "./client/ollama.ts";
 import { runShell } from "./tools/run-shell.ts";
 import { bold, cyan, gray, red, yellow } from "./utils/colors.ts";
+import { getEnvValue } from "./utils/env.ts";
 
 const MAX_ITERATIONS = 20;
+const LANGUAGE = getEnvValue("LANGUAGE");
 
 const registry: Tool[] = [runShell];
 const tools: ToolDefinition[] = registry.map((t) => t.def);
@@ -27,8 +29,7 @@ async function dispatch(call: ToolCall): Promise<string> {
 async function explainCalls(messages: Message[]): Promise<string> {
   const ask: Message = {
     role: "user",
-    content:
-      "Before executing, briefly explain in Russian what each tool call you just proposed will do. Quote each call and add one short sentence below it. Do not call tools.",
+    content: `Before executing, briefly explain in ${LANGUAGE} what each tool call you just proposed will do. Quote each call and add one short sentence below it. Do not call tools.`,
   };
 
   try {
@@ -39,7 +40,12 @@ async function explainCalls(messages: Message[]): Promise<string> {
   }
 }
 
-async function confirmBatch(calls: ToolCall[], intent: string): Promise<boolean> {
+type ConfirmResult =
+  | { kind: "approve" }
+  | { kind: "replan"; feedback: string }
+  | { kind: "quit" };
+
+async function confirmBatch(calls: ToolCall[], intent: string): Promise<ConfirmResult> {
   const trimmed = intent.trim();
   if (trimmed) {
     console.log(`\n${yellow(trimmed)}`);
@@ -53,8 +59,13 @@ async function confirmBatch(calls: ToolCall[], intent: string): Promise<boolean>
   const rl = createInterface({ input: stdin, output: stdout });
 
   try {
-    const answer = await rl.question("\n[y/N] ");
-    return answer.trim().toLowerCase() === "y";
+    const answer = (await rl.question("\n[y/N] ")).trim().toLowerCase();
+    if (answer === "y") return { kind: "approve" };
+
+    const feedback = (await rl.question("What to change? (empty to quit) ")).trim();
+    if (!feedback) return { kind: "quit" };
+
+    return { kind: "replan", feedback };
   } finally {
     rl.close();
   }
@@ -73,9 +84,19 @@ export async function run(messages: Message[]): Promise<void> {
     let explanation = await explainCalls(messages);
 
     const intent = explanation || reply.content;
-    if (!(await confirmBatch(reply.tool_calls, intent))) {
+    const decision = await confirmBatch(reply.tool_calls, intent);
+
+    if (decision.kind === "quit") {
       console.error(red("Cancelled by user."));
       return;
+    }
+
+    if (decision.kind === "replan") {
+      for (const _ of reply.tool_calls) {
+        messages.push({ role: "tool", content: "Rejected by user. Do not run this command." });
+      }
+      messages.push({ role: "user", content: decision.feedback });
+      continue;
     }
 
     for (const call of reply.tool_calls) {
