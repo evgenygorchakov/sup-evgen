@@ -3,7 +3,7 @@ import { stdin, stdout } from "node:process";
 import type { Message, Tool, ToolCall, ToolDefinition } from "./types.ts";
 import { chat } from "./client/ollama.ts";
 import { runShell } from "./tools/run-shell.ts";
-import { bold, cyan, gray, red } from "./utils/colors.ts";
+import { bold, cyan, gray, red, yellow } from "./utils/colors.ts";
 
 const MAX_ITERATIONS = 20;
 
@@ -24,7 +24,27 @@ async function dispatch(call: ToolCall): Promise<string> {
     .catch((e: Error) => `ERROR: ${e.message}`);
 }
 
-async function confirmBatch(calls: ToolCall[]): Promise<boolean> {
+async function explainCalls(messages: Message[]): Promise<string> {
+  const ask: Message = {
+    role: "user",
+    content:
+      "Before executing, briefly explain in Russian what each tool call you just proposed will do. Quote each call and add one short sentence below it. Do not call tools.",
+  };
+
+  try {
+    const explanation = await chat([...messages, ask]);
+    return explanation.content.trim();
+  } catch {
+    return "";
+  }
+}
+
+async function confirmBatch(calls: ToolCall[], intent: string): Promise<boolean> {
+  const trimmed = intent.trim();
+  if (trimmed) {
+    console.log(`\n${yellow(trimmed)}`);
+  }
+
   console.log(bold("\nModel wants to run:"));
   for (const call of calls) {
     console.log(`  ${cyan(call.function.name)}(${JSON.stringify(call.function.arguments)})`);
@@ -50,7 +70,10 @@ export async function run(messages: Message[]): Promise<void> {
       return;
     }
 
-    if (!(await confirmBatch(reply.tool_calls))) {
+    let explanation = await explainCalls(messages);
+
+    const intent = explanation || reply.content;
+    if (!(await confirmBatch(reply.tool_calls, intent))) {
       console.error(red("Cancelled by user."));
       return;
     }
