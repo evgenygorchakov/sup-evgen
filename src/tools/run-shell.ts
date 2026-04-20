@@ -36,18 +36,23 @@ export const runShell: Tool = {
     ) {
       return "ERROR: run_shell expects { command: string }";
     }
+
     const { command } = args as { command: string };
+
     return await new Promise<string>((resolve) => {
       const child = spawn("bash", ["-c", command], {
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
+
       let out = "";
       let err = "";
       child.stdout.on("data", (d) => (out += d));
       child.stderr.on("data", (d) => (err += d));
+
       child.on("close", (code) => {
         resolve(`exit=${code}\nstdout:\n${cap(out)}\nstderr:\n${cap(err)}`);
       });
+
       child.on("error", (e) => {
         resolve(`exec_error: ${e.message}`);
       });

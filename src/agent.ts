@@ -1,17 +1,37 @@
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
-import type { Message, ToolCall } from "./types.ts";
-import { chat } from "./ollama.ts";
-import { tools, dispatch } from "./tools/index.ts";
-import { MAX_ITERATIONS } from "./config.ts";
-import { bold, cyan, red } from "./utils/colors.ts";
+import type { Message, Tool, ToolCall, ToolDefinition } from "./types.ts";
+import { chat } from "./client/ollama.ts";
+import { runShell } from "./tools/run-shell.ts";
+import { bold, cyan, gray, red } from "./utils/colors.ts";
+
+const MAX_ITERATIONS = 20;
+
+const registry: Tool[] = [runShell];
+const tools: ToolDefinition[] = registry.map((t) => t.def);
+const byName: Record<string, Tool> = Object.fromEntries(
+  registry.map((t) => [t.def.function.name, t]),
+);
+
+async function dispatch(call: ToolCall): Promise<string> {
+  const tool = byName[call.function.name];
+  if (!tool) return `Unknown tool: ${call.function.name}`;
+
+  console.error(gray(`→ ${call.function.name}(${JSON.stringify(call.function.arguments)})`));
+
+  return await tool
+    .handler(call.function.arguments)
+    .catch((e: Error) => `ERROR: ${e.message}`);
+}
 
 async function confirmBatch(calls: ToolCall[]): Promise<boolean> {
   console.log(bold("\nModel wants to run:"));
   for (const call of calls) {
     console.log(`  ${cyan(call.function.name)}(${JSON.stringify(call.function.arguments)})`);
   }
+
   const rl = createInterface({ input: stdin, output: stdout });
+
   try {
     const answer = await rl.question("\n[y/N] ");
     return answer.trim().toLowerCase() === "y";
