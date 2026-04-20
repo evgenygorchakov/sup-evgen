@@ -1,6 +1,14 @@
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
-import type { Message, Tool, ToolCall, ToolDefinition } from "./types.ts";
+
+import type {
+  ConfirmResult,
+  Message,
+  Tool,
+  ToolCall,
+  ToolDefinition
+} from "./types.ts";
+
 import { chat } from "./client/ollama.ts";
 import { runShell } from "./tools/run-shell.ts";
 import { bold, cyan, gray, red, yellow } from "./utils/colors.ts";
@@ -40,11 +48,6 @@ async function explainCalls(messages: Message[]): Promise<string> {
   }
 }
 
-type ConfirmResult =
-  | { kind: "approve" }
-  | { kind: "replan"; feedback: string }
-  | { kind: "quit" };
-
 async function confirmBatch(calls: ToolCall[], intent: string): Promise<ConfirmResult> {
   const trimmed = intent.trim();
   if (trimmed) {
@@ -59,13 +62,13 @@ async function confirmBatch(calls: ToolCall[], intent: string): Promise<ConfirmR
   const rl = createInterface({ input: stdin, output: stdout });
 
   try {
-    const answer = (await rl.question("\n[y/N] ")).trim().toLowerCase();
-    if (answer === "y") return { kind: "approve" };
+    const answer = (await rl.question("\n[y / n / type feedback] ")).trim();
+    const lowered = answer.toLowerCase();
 
-    const feedback = (await rl.question("What to change? (empty to quit) ")).trim();
-    if (!feedback) return { kind: "quit" };
+    if (lowered === "y") return { kind: "approve" };
+    if (!answer || lowered === "n" || lowered === "no") return { kind: "quit" };
 
-    return { kind: "replan", feedback };
+    return { kind: "replan", feedback: answer };
   } finally {
     rl.close();
   }

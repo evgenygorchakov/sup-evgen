@@ -28,3 +28,8 @@ export type Tool = {
   def: ToolDefinition;
   handler: ToolHandler;
 };
+
+export type ConfirmResult =
+  | { kind: "approve" }
+  | { kind: "replan"; feedback: string }
+  | { kind: "quit" };
