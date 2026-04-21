@@ -1,11 +1,11 @@
 import type { Message, ToolDefinition } from '../../types.ts'
 import type { ChatProvider } from '../types.ts'
 
-import { parseEnvToBoolean } from '../../utils/env.ts'
+import { getConfigValue } from '../../utils/env.ts'
 import { chat as rawChat } from './chat.ts'
 import { buildReplyFormat, buildToolsInstruction, parsePromptToolsReply } from './prompt-tools.ts'
 
-const useNative = parseEnvToBoolean('USE_NATIVE_OLLAMA_TOOLS')
+const useNative = getConfigValue('USE_NATIVE_OLLAMA_TOOLS')
 
 function withToolsInstruction(messages: Message[], instruction: string): Message[] {
   const first = messages[0]

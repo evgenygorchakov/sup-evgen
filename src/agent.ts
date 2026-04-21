@@ -14,10 +14,10 @@ import { runShell } from './tools/run-shell.ts'
 
 import { CONFIRM_KIND } from './types.ts'
 import { bold, brightBlue, brightGreen, gray, red, yellow } from './utils/colors.ts'
-import { getEnvValue, parseEnvToNumber } from './utils/env.ts'
+import { getConfigValue } from './utils/env.ts'
 
-const maxIterations = parseEnvToNumber('MAX_AGENT_ITERATIONS')
-const language = getEnvValue('LANGUAGE')
+const maxIterations = getConfigValue('MAX_AGENT_ITERATIONS')
+const language = getConfigValue('LANGUAGE')
 
 const EXPLAIN_CALLS_MESSAGE = `Before executing, briefly explain in ${language} what each tool call you just proposed will do. Quote each call and add one short sentence below it. Do not call tools.`
 

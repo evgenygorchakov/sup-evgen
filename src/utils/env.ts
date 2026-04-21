@@ -1,31 +1,16 @@
-import process from 'node:process'
+const CONFIG = {
+  PROVIDER: 'ollama',
+  OLLAMA_HOST: 'http://host.docker.internal:11434',
+  OLLAMA_MODEL: 'gpt-oss:latest',
+  LANGUAGE: 'russian',
+  USE_NATIVE_OLLAMA_TOOLS: false,
+  MAX_AGENT_ITERATIONS: 20,
+} as const
 
-export function getEnvValue(name: string): string {
-  const value = process.env[name]
-
-  if (!value) {
-    throw new Error(`Missing env var: ${name}. Check .env file.`)
+export function getConfigValue(name) {
+  if (CONFIG[name] !== undefined) {
+    return CONFIG[name]
   }
 
-  return value
-}
-
-export function parseEnvToBoolean(name: string): boolean {
-  const value = getEnvValue(name)
-  if (value === '1') {
-    return true
-  }
-
-  return false
-}
-
-export function parseEnvToNumber(name: string): number {
-  const value = getEnvValue(name)
-  const number = Number(value)
-
-  if (Number.isNaN(number)) {
-    return 0
-  }
-
-  return number
+  throw new Error(`Missing var: ${name}.`)
 }

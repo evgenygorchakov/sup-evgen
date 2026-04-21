@@ -1,10 +1,10 @@
-#!/usr/bin/env -S node --env-file=.env
+#!/usr/bin/env node
 import process from 'node:process'
 import { run } from './src/agent.ts'
 import { getProvider } from './src/providers/index.ts'
-import { getEnvValue } from './src/utils/env.ts'
+import { getConfigValue } from './src/utils/env.ts'
 
-const LANGUAGE = getEnvValue('LANGUAGE')
+const LANGUAGE = getConfigValue('LANGUAGE')
 
 const SYSTEM_PROMPT = [
   'You are a local assistant agent running on the user\'s machine.',

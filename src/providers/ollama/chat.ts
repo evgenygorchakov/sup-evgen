@@ -1,8 +1,8 @@
 import type { Message, ToolDefinition } from '../../types.ts'
-import { getEnvValue } from '../../utils/env.ts'
+import { getConfigValue } from '../../utils/env.ts'
 
-const HOST = getEnvValue('OLLAMA_HOST')
-const MODEL = getEnvValue('OLLAMA_MODEL')
+const HOST = getConfigValue('OLLAMA_HOST')
+const MODEL = getConfigValue('OLLAMA_MODEL')
 const REQUEST_TIMEOUT_MS = 300_000
 
 export async function chat(
