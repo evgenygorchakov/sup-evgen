@@ -1,13 +1,16 @@
 import type { Interface as ReadlineInterface } from 'node:readline/promises'
 import type { ChatProvider } from './providers/types.ts'
 import type {
+  ChatChunk,
   ConfirmResult,
   Message,
+  OnChunk,
   Tool,
   ToolCall,
   ToolDefinition,
 } from './types.ts'
 
+import process from 'node:process'
 import { Config } from './config.ts'
 
 import { runShell } from './tools/run-shell.ts'
@@ -54,19 +57,39 @@ async function explainCalls(provider: ChatProvider, messages: Message[]): Promis
   }
 }
 
+function streamingCallback(paint: (text: string) => string): { onChunk: OnChunk, streamed: () => boolean } {
+  let didStream = false
+
+  const onChunk: OnChunk = (chunk: ChatChunk) => {
+    if (chunk.content) {
+      didStream = true
+      process.stderr.write(paint(chunk.content))
+    }
+  }
+
+  return { onChunk, streamed: () => didStream }
+}
+
 async function planTurn(provider: ChatProvider, messages: Message[], rl: ReadlineInterface): Promise<'proceed' | 'quit'> {
   while (true) {
+    console.warn(bold(brightBlue('\nProposed plan:')))
+
+    const { onChunk, streamed } = streamingCallback(yellow)
     const plan = await provider.chat(
       [...messages, { role: 'user', content: PLAN_REQUEST_MESSAGE }],
       [],
+      onChunk,
     )
 
-    console.warn(bold(brightBlue('\nProposed plan:')))
+    if (streamed()) {
+      process.stderr.write('\n')
+    }
+    else {
+      const planText = plan.content.trim()
 
-    const planText = plan.content.trim()
-
-    if (planText) {
-      console.warn(yellow(planText))
+      if (planText) {
+        console.warn(yellow(planText))
+      }
     }
 
     const answer = (await rl.question(brightGreen('\n[y / n / type feedback] '))).trim()
@@ -123,13 +146,23 @@ export async function run(provider: ChatProvider, messages: Message[], rl: Readl
   }
 
   while (true) {
-    const reply = await provider.chat(messages, tools)
+    const { onChunk, streamed } = streamingCallback(s => s)
+    const reply = await provider.chat(messages, tools, onChunk)
 
     messages.push(reply)
 
     if (!reply.tool_calls?.length) {
-      console.warn(reply.content)
+      if (streamed()) {
+        process.stderr.write('\n')
+      }
+      else {
+        console.warn(reply.content)
+      }
       return
+    }
+
+    if (streamed()) {
+      process.stderr.write('\n')
     }
 
     const explanation = useDetailedExplanation ? await explainCalls(provider, messages) : ''

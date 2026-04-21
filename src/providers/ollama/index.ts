@@ -1,4 +1,4 @@
-import type { Message, ToolDefinition } from '../../types.ts'
+import type { Message, OnChunk, ToolDefinition } from '../../types.ts'
 import type { ChatProvider } from '../types.ts'
 
 import { Config } from '../../config.ts'
@@ -20,13 +20,13 @@ function withToolsInstruction(messages: Message[], instruction: string): Message
   return [{ role: 'system', content: instruction }, ...messages]
 }
 
-async function chat(messages: Message[], tools: ToolDefinition[]): Promise<Message> {
+async function chat(messages: Message[], tools: ToolDefinition[], onChunk?: OnChunk): Promise<Message> {
   if (!tools.length) {
-    return await rawChat(messages)
+    return await rawChat(messages, undefined, undefined, onChunk)
   }
 
   if (useNative) {
-    return await rawChat(messages, tools)
+    return await rawChat(messages, tools, undefined, onChunk)
   }
 
   const prepared = withToolsInstruction(messages, buildToolsInstruction(tools))

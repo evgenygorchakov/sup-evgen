@@ -6,6 +6,13 @@ export interface Message {
   tool_calls?: ToolCall[]
 }
 
+export interface ChatChunk {
+  content?: string
+  thinking?: string
+}
+
+export type OnChunk = (chunk: ChatChunk) => void
+
 export interface ToolCall {
   function: {
     name: string
