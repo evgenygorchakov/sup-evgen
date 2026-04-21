@@ -29,4 +29,15 @@ export interface Tool {
   handler: ToolHandler
 }
 
-export type ConfirmResult = | { kind: 'approve' } | { kind: 'replan', feedback: string } | { kind: 'quit' }
+export const CONFIRM_KIND = {
+  approve: 'approve',
+  replan: 'replan',
+  quit: 'quit',
+} as const
+
+export type ConfirmKind = (typeof CONFIRM_KIND)[keyof typeof CONFIRM_KIND]
+
+export type ConfirmResult
+  = | { kind: typeof CONFIRM_KIND.approve }
+    | { kind: typeof CONFIRM_KIND.replan, feedback: string }
+    | { kind: typeof CONFIRM_KIND.quit }
