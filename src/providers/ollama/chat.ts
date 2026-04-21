@@ -1,5 +1,5 @@
-import type { Message, ToolDefinition } from '../types.ts'
-import { getEnvValue } from '../utils/env.ts'
+import type { Message, ToolDefinition } from '../../types.ts'
+import { getEnvValue } from '../../utils/env.ts'
 
 const HOST = getEnvValue('OLLAMA_HOST')
 const MODEL = getEnvValue('OLLAMA_MODEL')

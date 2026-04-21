@@ -1,4 +1,4 @@
-import type { ToolCall, ToolDefinition } from '../types.ts'
+import type { ToolCall, ToolDefinition } from '../../types.ts'
 
 export interface PromptToolsReply {
   message: string
@@ -60,7 +60,6 @@ export function parsePromptToolsReply(content: string): PromptToolsReply {
   }
 
   const obj = parsed as { message?: unknown, tool_calls?: unknown }
-
   const message = typeof obj.message === 'string' ? obj.message : ''
 
   if (!Array.isArray(obj.tool_calls)) {

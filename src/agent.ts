@@ -1,3 +1,4 @@
+import type { ChatProvider } from './providers/types.ts'
 import type {
   ConfirmResult,
   Message,
@@ -9,17 +10,14 @@ import type {
 import { stdin, stdout } from 'node:process'
 import { createInterface } from 'node:readline/promises'
 
-import { chat } from './client/ollama.ts'
-import { buildReplyFormat, buildToolsInstruction, parsePromptToolsReply } from './client/prompt-tools.ts'
 import { runShell } from './tools/run-shell.ts'
 
 import { CONFIRM_KIND } from './types.ts'
 import { bold, brightBlue, brightGreen, gray, red, yellow } from './utils/colors.ts'
-import { getEnvValue, parseEnvToBoolean, parseEnvToNumber } from './utils/env.ts'
+import { getEnvValue, parseEnvToNumber } from './utils/env.ts'
 
 const maxIterations = parseEnvToNumber('MAX_AGENT_ITERATIONS')
 const language = getEnvValue('LANGUAGE')
-const shouldUseNativeOllamaPromptTools = parseEnvToBoolean('USE_NATIVE_OLLAMA_TOOLS')
 
 const EXPLAIN_CALLS_MESSAGE = `Before executing, briefly explain in ${language} what each tool call you just proposed will do. Quote each call and add one short sentence below it. Do not call tools.`
 
@@ -41,26 +39,15 @@ async function dispatch(call: ToolCall): Promise<string> {
     .catch((e: Error) => `ERROR: ${e.message}`)
 }
 
-async function explainCalls(messages: Message[]): Promise<string> {
+async function explainCalls(provider: ChatProvider, messages: Message[]): Promise<string> {
   const ask: Message = {
     role: 'user',
     content: EXPLAIN_CALLS_MESSAGE,
   }
 
   try {
-    const format = shouldUseNativeOllamaPromptTools ? buildReplyFormat(tools) : undefined
-    const explanation = await chat([...messages, ask], undefined, format)
-    const raw = explanation.content.trim()
-
-    if (!shouldUseNativeOllamaPromptTools)
-      return raw
-
-    try {
-      return parsePromptToolsReply(raw).message.trim()
-    }
-    catch {
-      return raw
-    }
+    const explanation = await provider.chat([...messages, ask], tools)
+    return explanation.content.trim()
   }
   catch {
     return ''
@@ -96,36 +83,9 @@ async function confirmBatch(calls: ToolCall[], intent: string): Promise<ConfirmR
   }
 }
 
-export async function run(messages: Message[]): Promise<void> {
-  if (shouldUseNativeOllamaPromptTools) {
-    const instruction = buildToolsInstruction(tools)
-    const first = messages[0]
-    if (first?.role === 'system') {
-      first.content = `${first.content}\n\n${instruction}`
-    }
-    else {
-      messages.unshift({ role: 'system', content: instruction })
-    }
-  }
-
+export async function run(provider: ChatProvider, messages: Message[]): Promise<void> {
   for (let i = 0; i < maxIterations; i++) {
-    const reply = await chat(
-      messages,
-      shouldUseNativeOllamaPromptTools ? undefined : tools,
-      shouldUseNativeOllamaPromptTools ? buildReplyFormat(tools) : undefined,
-    )
-
-    if (shouldUseNativeOllamaPromptTools) {
-      try {
-        const parsed = parsePromptToolsReply(reply.content)
-        reply.content = parsed.message
-        if (parsed.tool_calls.length)
-          reply.tool_calls = parsed.tool_calls
-      }
-      catch {
-        // malformed JSON — fall through with raw content and no tool_calls
-      }
-    }
+    const reply = await provider.chat(messages, tools)
 
     messages.push(reply)
 
@@ -134,7 +94,7 @@ export async function run(messages: Message[]): Promise<void> {
       return
     }
 
-    const explanation = await explainCalls(messages)
+    const explanation = await explainCalls(provider, messages)
 
     const intent = explanation || reply.content
     const decision = await confirmBatch(reply.tool_calls, intent)
@@ -148,6 +108,7 @@ export async function run(messages: Message[]): Promise<void> {
       for (const _ of reply.tool_calls) {
         messages.push({ role: 'tool', content: 'Rejected by user. Do not run this command.' })
       }
+
       messages.push({ role: 'user', content: decision.feedback })
       continue
     }

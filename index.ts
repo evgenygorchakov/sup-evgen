@@ -1,6 +1,7 @@
 #!/usr/bin/env -S node --env-file=.env
 import process from 'node:process'
 import { run } from './src/agent.ts'
+import { getProvider } from './src/providers/index.ts'
 import { getEnvValue } from './src/utils/env.ts'
 
 const LANGUAGE = getEnvValue('LANGUAGE')
@@ -20,7 +21,7 @@ if (!userPrompt) {
 }
 
 async function main() {
-  await run([
+  await run(getProvider(), [
     { role: 'system', content: SYSTEM_PROMPT },
     { role: 'user', content: userPrompt },
   ])
