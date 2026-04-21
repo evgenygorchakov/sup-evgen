@@ -1,4 +1,4 @@
-# agent
+# Agent
 
 Minimal local CLI assistant. Sends a prompt to a local [Ollama](https://ollama.com) model, lets it propose shell commands, explains what it'll do, asks before running, and loops until the task is done.
 
@@ -16,22 +16,8 @@ Model wants to run:
 ## Setup
 
 ```bash
-cp .env.example .env   # set OLLAMA_HOST, OLLAMA_MODEL, LANGUAGE
-npm start -- "show files in the current folder"
-```
-
-`LANGUAGE` sets the response language for both the system prompt and the pre-confirmation explanation.
-
-## Architecture
-
-```
-index.ts              # argv → system prompt → agent loop
-src/
-  agent.ts            # chat → explain → confirm → dispatch → repeat
-  client/ollama.ts    # POST /api/chat with tools, validates response
-  tools/run-shell.ts  # bash -c, 30 s timeout, 20 KB output cap
-  types.ts
-  utils/              # colors, env
+npm install (only for dev mode)
+npm link
 ```
 
 ## Flow
@@ -41,14 +27,12 @@ src/
 3. `tool_calls` → second request (no tools) for an explanation.
 4. Show explanation + command list; prompt `[y / n / type feedback]`.
 5. `y` → run and loop. `n` / `no` / empty → quit. Any other text → treat as feedback, push it as a user message, model replans on the next iteration.
-6. Hard stop at 20 iterations.
 
 ## Pros
 
 - zero runtime deps.
 - Every command shown and explained before running.
 - Rejection is a conversation — give feedback, model replans.
-- Timeouts and output caps on both sides.
 
 ## Cons
 
@@ -56,7 +40,6 @@ src/
 - One-shot CLI; no interactive chat.
 - Explain adds a round trip per confirmation (2–10 s on local).
 - Shell output buffered in memory during streaming, capped only on close.
-- No `tool_call_id` round-tripping; no retries on transient Ollama errors.
 
 ## Security
 
