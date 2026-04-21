@@ -61,10 +61,3 @@ src/
 ## Security
 
 **The only gate is the `[y / n / type feedback]` prompt. Read every command before approving.**
-
-- No sandbox — commands run with your full user privileges.
-- The yellow explanation can mislead: always read the cyan command line, not just the summary.
-- Shown-vs-executed mismatch is *not* a risk — the same `call` object is printed and dispatched.
-- Command output feeds back into the model → prompt injection risk.
-- Watch for `;`, `&&`, `||`, `|`, `>`, `>>`, `$(...)`, backticks, and non-ASCII in command strings.
-- Trust boundary: `OLLAMA_HOST` must be trusted. For anything beyond read-only exploration, run inside a VM or container.
