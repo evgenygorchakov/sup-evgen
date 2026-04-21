@@ -5,11 +5,11 @@ import { resolve } from 'node:path'
 import process, { stdin, stdout } from 'node:process'
 import { createInterface } from 'node:readline/promises'
 import { run } from './src/agent.ts'
+import { Config } from './src/config.ts'
 import { getProvider } from './src/providers/index.ts'
 import { bold, brightGreen, gray } from './src/utils/colors.ts'
-import { getConfigValue } from './src/utils/env.ts'
 
-const LANGUAGE = getConfigValue('LANGUAGE')
+const language = Config.LANGUAGE
 
 const SYSTEM_PROMPT = [
   'You are a local CLI assistant running on the user\'s machine.',
@@ -19,9 +19,11 @@ const SYSTEM_PROMPT = [
   '- No preambles ("Sure", "Of course", "I\'ll..."). No closing summaries ("I\'ve done X, Y, Z", "Hope that helps").',
   '- Do not restate tool output. Answer only what was asked.',
   '- No emojis, no flattery, no apologies, no filler.',
-  '- Before each tool call, state your intent in one short sentence — nothing more.',
+  '- Before each tool call, state your intent in one short sentence. This is not a final answer.',
+  '- If you already know the answer, reply in plain text. Never wrap your own answer in run_shell, cat/heredoc, echo or printf.',
+  '- run_shell is only for commands whose output you do not yet have.',
   '- Skip the tool if the answer is already known from the conversation. If the task cannot be done, say so directly.',
-  `Always respond in ${LANGUAGE}.`,
+  `Always respond in ${language}.`,
 ].join('\n')
 
 const EXIT_WORDS = new Set(['exit', 'quit', ':q'])

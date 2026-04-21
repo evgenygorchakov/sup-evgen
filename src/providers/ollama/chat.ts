@@ -1,9 +1,17 @@
 import type { Message, ToolDefinition } from '../../types.ts'
-import { getConfigValue } from '../../utils/env.ts'
+import { Config } from '../../config.ts'
 
-const HOST = getConfigValue('OLLAMA_HOST')
-const MODEL = getConfigValue('OLLAMA_MODEL')
+const HOST = Config.HOST
+const MODEL = Config.MODEL
 const REQUEST_TIMEOUT_MS = 300_000
+
+function canThink(model: string): boolean | string {
+  if (model === 'gpt-oss') {
+    return 'high'
+  }
+
+  return ['qwen3.5:35b'].includes(model)
+}
 
 export async function chat(
   messages: Message[],
@@ -18,6 +26,7 @@ export async function chat(
       messages,
       tools,
       format,
+      think: canThink(MODEL),
       stream: false,
     }),
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),

@@ -8,15 +8,18 @@ import type {
   ToolDefinition,
 } from './types.ts'
 
-import { runShell } from './tools/run-shell.ts'
+import { Config } from './config.ts'
 
+import { runShell } from './tools/run-shell.ts'
 import { CONFIRM_KIND } from './types.ts'
 import { bold, brightBlue, brightGreen, gray, red, yellow } from './utils/colors.ts'
-import { getConfigValue } from './utils/env.ts'
 
-const language = getConfigValue('LANGUAGE')
+const language = Config.LANGUAGE
+const useDetailedExplanation = Config.USE_DETAILED_COMMAND_EXPLANATION
+const usePlanMode = Config.USE_PLAN_MODE
 
 const EXPLAIN_CALLS_MESSAGE = `Before executing, briefly explain in ${language} what each tool call you just proposed will do. Quote each call and add one short sentence below it. Do not call tools.`
+const PLAN_REQUEST_MESSAGE = `Before doing anything, describe in 2-4 short sentences in ${language} what you plan to do to answer the user. Do not call tools. Wait for approval.`
 
 const registry: Tool[] = [runShell]
 const tools: ToolDefinition[] = registry.map(t => t.def)
@@ -51,6 +54,38 @@ async function explainCalls(provider: ChatProvider, messages: Message[]): Promis
   }
 }
 
+async function planTurn(provider: ChatProvider, messages: Message[], rl: ReadlineInterface): Promise<'proceed' | 'quit'> {
+  while (true) {
+    const plan = await provider.chat(
+      [...messages, { role: 'user', content: PLAN_REQUEST_MESSAGE }],
+      [],
+    )
+
+    console.warn(bold(brightBlue('\nProposed plan:')))
+
+    const planText = plan.content.trim()
+
+    if (planText) {
+      console.warn(yellow(planText))
+    }
+
+    const answer = (await rl.question(brightGreen('\n[y / n / type feedback] '))).trim()
+    const lowered = answer.toLowerCase()
+
+    if (lowered === 'y') {
+      messages.push(plan)
+      return 'proceed'
+    }
+
+    if (!answer || lowered === 'n') {
+      return 'quit'
+    }
+
+    messages.push(plan)
+    messages.push({ role: 'user', content: answer })
+  }
+}
+
 async function confirmBatch(calls: ToolCall[], intent: string, rl: ReadlineInterface): Promise<ConfirmResult> {
   const trimmed = intent.trim()
   if (trimmed) {
@@ -58,6 +93,7 @@ async function confirmBatch(calls: ToolCall[], intent: string, rl: ReadlineInter
   }
 
   console.warn(bold(brightBlue('\nModel wants to run:')))
+
   for (const call of calls) {
     console.warn(` ${call.function.name}(${JSON.stringify(call.function.arguments)})`)
   }
@@ -65,15 +101,27 @@ async function confirmBatch(calls: ToolCall[], intent: string, rl: ReadlineInter
   const answer = (await rl.question(brightGreen('\n[y / n / type feedback] '))).trim()
   const lowered = answer.toLowerCase()
 
-  if (lowered === 'y')
+  if (lowered === 'y') {
     return { kind: CONFIRM_KIND.approve }
-  if (!answer || lowered === 'n')
+  }
+
+  if (!answer || lowered === 'n') {
     return { kind: CONFIRM_KIND.quit }
+  }
 
   return { kind: CONFIRM_KIND.replan, feedback: answer }
 }
 
 export async function run(provider: ChatProvider, messages: Message[], rl: ReadlineInterface): Promise<void> {
+  if (usePlanMode && messages[messages.length - 1]?.role === 'user') {
+    const decision = await planTurn(provider, messages, rl)
+
+    if (decision === 'quit') {
+      console.error(red('Cancelled by user.'))
+      return
+    }
+  }
+
   while (true) {
     const reply = await provider.chat(messages, tools)
 
@@ -84,7 +132,7 @@ export async function run(provider: ChatProvider, messages: Message[], rl: Readl
       return
     }
 
-    const explanation = await explainCalls(provider, messages)
+    const explanation = useDetailedExplanation ? await explainCalls(provider, messages) : ''
 
     const intent = explanation || reply.content
     const decision = await confirmBatch(reply.tool_calls, intent, rl)

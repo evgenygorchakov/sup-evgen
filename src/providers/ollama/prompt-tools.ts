@@ -25,6 +25,8 @@ export function buildToolsInstruction(tools: ToolDefinition[]): string {
     '- "arguments": object with the tool arguments matching its parameters schema.',
     '',
     'When you are done and want to answer the user, return an empty tool_calls array.',
+    'Do not use any tool to echo, cat, print or otherwise emit text you yourself composed. Put user-facing text in "message".',
+    '"arguments" must contain ONLY the parameters listed in that tool\'s parameters schema. Do not add "name" or any other extra fields.',
     'Do not include tool output, commentary, or anything outside the JSON object.',
   ].join('\n')
 }
