@@ -1,3 +1,4 @@
+import type { Interface as ReadlineInterface } from 'node:readline/promises'
 import type { ChatProvider } from './providers/types.ts'
 import type {
   ConfirmResult,
@@ -7,16 +8,12 @@ import type {
   ToolDefinition,
 } from './types.ts'
 
-import { stdin, stdout } from 'node:process'
-import { createInterface } from 'node:readline/promises'
-
 import { runShell } from './tools/run-shell.ts'
 
 import { CONFIRM_KIND } from './types.ts'
 import { bold, brightBlue, brightGreen, gray, red, yellow } from './utils/colors.ts'
 import { getConfigValue } from './utils/env.ts'
 
-const maxIterations = getConfigValue('MAX_AGENT_ITERATIONS')
 const language = getConfigValue('LANGUAGE')
 
 const EXPLAIN_CALLS_MESSAGE = `Before executing, briefly explain in ${language} what each tool call you just proposed will do. Quote each call and add one short sentence below it. Do not call tools.`
@@ -54,7 +51,7 @@ async function explainCalls(provider: ChatProvider, messages: Message[]): Promis
   }
 }
 
-async function confirmBatch(calls: ToolCall[], intent: string): Promise<ConfirmResult> {
+async function confirmBatch(calls: ToolCall[], intent: string, rl: ReadlineInterface): Promise<ConfirmResult> {
   const trimmed = intent.trim()
   if (trimmed) {
     console.warn(`\n${yellow(trimmed)}`)
@@ -65,26 +62,19 @@ async function confirmBatch(calls: ToolCall[], intent: string): Promise<ConfirmR
     console.warn(` ${call.function.name}(${JSON.stringify(call.function.arguments)})`)
   }
 
-  const rl = createInterface({ input: stdin, output: stdout })
+  const answer = (await rl.question(brightGreen('\n[y / n / type feedback] '))).trim()
+  const lowered = answer.toLowerCase()
 
-  try {
-    const answer = (await rl.question(brightGreen('\n[y / n / type feedback] '))).trim()
-    const lowered = answer.toLowerCase()
+  if (lowered === 'y')
+    return { kind: CONFIRM_KIND.approve }
+  if (!answer || lowered === 'n')
+    return { kind: CONFIRM_KIND.quit }
 
-    if (lowered === 'y')
-      return { kind: CONFIRM_KIND.approve }
-    if (!answer || lowered === 'n')
-      return { kind: CONFIRM_KIND.quit }
-
-    return { kind: CONFIRM_KIND.replan, feedback: answer }
-  }
-  finally {
-    rl.close()
-  }
+  return { kind: CONFIRM_KIND.replan, feedback: answer }
 }
 
-export async function run(provider: ChatProvider, messages: Message[]): Promise<void> {
-  for (let i = 0; i < maxIterations; i++) {
+export async function run(provider: ChatProvider, messages: Message[], rl: ReadlineInterface): Promise<void> {
+  while (true) {
     const reply = await provider.chat(messages, tools)
 
     messages.push(reply)
@@ -97,7 +87,7 @@ export async function run(provider: ChatProvider, messages: Message[]): Promise<
     const explanation = await explainCalls(provider, messages)
 
     const intent = explanation || reply.content
-    const decision = await confirmBatch(reply.tool_calls, intent)
+    const decision = await confirmBatch(reply.tool_calls, intent, rl)
 
     if (decision.kind === CONFIRM_KIND.quit) {
       console.error(red('Cancelled by user.'))
@@ -118,6 +108,4 @@ export async function run(provider: ChatProvider, messages: Message[]): Promise<
       messages.push({ role: 'tool', content: result })
     }
   }
-
-  console.error(red(`Reached MAX_ITERATIONS (${maxIterations}) without final answer.`))
 }

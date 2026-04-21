@@ -84,3 +84,85 @@ export function parsePromptToolsReply(content: string): PromptToolsReply {
 
   return { message, tool_calls }
 }
+
+function tryOnce(raw: string): PromptToolsReply | null {
+  try {
+    return parsePromptToolsReply(raw)
+  }
+  catch {
+    return null
+  }
+}
+
+// Find the first balanced {...} block, respecting string literals and escapes.
+function extractFirstJsonObject(content: string): string | null {
+  let depth = 0
+  let start = -1
+  let inString = false
+  let escape = false
+
+  for (let i = 0; i < content.length; i++) {
+    const ch = content[i]
+
+    if (inString) {
+      if (escape)
+        escape = false
+      else if (ch === '\\')
+        escape = true
+      else if (ch === '"')
+        inString = false
+      continue
+    }
+
+    if (ch === '"') {
+      inString = true
+      continue
+    }
+
+    if (ch === '{') {
+      if (depth === 0)
+        start = i
+      depth++
+    }
+    else if (ch === '}') {
+      depth--
+      if (depth === 0 && start !== -1) {
+        return content.slice(start, i + 1)
+      }
+    }
+  }
+
+  return null
+}
+
+export function tryParsePromptToolsReply(content: string): PromptToolsReply | null {
+  const strict = tryOnce(content)
+
+  if (strict) {
+    return strict
+  }
+
+  const trimmed = content.trim()
+  const firstBrace = trimmed.indexOf('{')
+  const lastBrace = trimmed.lastIndexOf('}')
+
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    const sliced = tryOnce(trimmed.slice(firstBrace, lastBrace + 1))
+
+    if (sliced) {
+      return sliced
+    }
+  }
+
+  const balanced = extractFirstJsonObject(content)
+
+  if (balanced) {
+    const parsed = tryOnce(balanced)
+
+    if (parsed) {
+      return parsed
+    }
+  }
+
+  return null
+}
