@@ -1,21 +1,21 @@
 {
   "compilerOptions": {
-    "allowImportingTsExtensions": true,
-    "noUncheckedIndexedAccess": true,
-    "experimentalDecorators": true,
-    "noImplicitOverride": true,
-    "verbatimModuleSyntax": true,
-    "moduleResolution": "NodeNext",
-    "erasableSyntaxOnly": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "allowJs": true,
     "target": "ES2024",
+    "lib": ["es2024", "dom"],
+    "experimentalDecorators": true,
     "module": "NodeNext",
-    "strict": true,
-    "noEmit": true,
+    "moduleResolution": "NodeNext",
     "types": ["node"],
-    "lib": ["es2024", "dom"]
+    "allowImportingTsExtensions": true,
+    "allowJs": true,
+    "strict": true,
+    "noImplicitOverride": true,
+    "noUncheckedIndexedAccess": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
+    "skipLibCheck": true
   },
   "exclude": ["dist/"]
 }

@@ -1,35 +1,32 @@
-export type Role = "system" | "user" | "assistant" | "tool";
+export type Role = 'system' | 'user' | 'assistant' | 'tool'
 
-export type Message = {
-  role: Role;
-  content: string;
-  tool_calls?: ToolCall[];
-};
+export interface Message {
+  role: Role
+  content: string
+  tool_calls?: ToolCall[]
+}
 
-export type ToolCall = {
+export interface ToolCall {
   function: {
-    name: string;
-    arguments: Record<string, unknown>;
-  };
-};
+    name: string
+    arguments: Record<string, unknown>
+  }
+}
 
-export type ToolDefinition = {
-  type: "function";
+export interface ToolDefinition {
+  type: 'function'
   function: {
-    name: string;
-    description: string;
-    parameters: object;
-  };
-};
+    name: string
+    description: string
+    parameters: object
+  }
+}
 
-export type ToolHandler = (args: unknown) => Promise<string>;
+export type ToolHandler = (args: unknown) => Promise<string>
 
-export type Tool = {
-  def: ToolDefinition;
-  handler: ToolHandler;
-};
+export interface Tool {
+  def: ToolDefinition
+  handler: ToolHandler
+}
 
-export type ConfirmResult =
-  | { kind: "approve" }
-  | { kind: "replan"; feedback: string }
-  | { kind: "quit" };
+export type ConfirmResult = | { kind: 'approve' } | { kind: 'replan', feedback: string } | { kind: 'quit' }

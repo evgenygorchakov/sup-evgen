@@ -1,112 +1,165 @@
-import { createInterface } from "node:readline/promises";
-import { stdin, stdout } from "node:process";
-
 import type {
   ConfirmResult,
   Message,
   Tool,
   ToolCall,
-  ToolDefinition
-} from "./types.ts";
+  ToolDefinition,
+} from './types.ts'
 
-import { chat } from "./client/ollama.ts";
-import { runShell } from "./tools/run-shell.ts";
-import { bold, cyan, gray, red, yellow } from "./utils/colors.ts";
-import { getEnvValue } from "./utils/env.ts";
+import { stdin, stdout } from 'node:process'
 
-const MAX_ITERATIONS = 20;
-const LANGUAGE = getEnvValue("LANGUAGE");
+import { createInterface } from 'node:readline/promises'
 
-const registry: Tool[] = [runShell];
-const tools: ToolDefinition[] = registry.map((t) => t.def);
+import { chat } from './client/ollama.ts'
+import {
+  buildReplyFormat,
+  buildToolsInstruction,
+  parsePromptToolsReply,
+} from './client/prompt-tools.ts'
+
+import { runShell } from './tools/run-shell.ts'
+import { bold, brightBlue, brightGreen, gray, red, yellow } from './utils/colors.ts'
+import { getEnvValue, parseEnvToBoolean, parseEnvToNumber } from './utils/env.ts'
+
+const MAX_ITERATIONS = parseEnvToNumber('MAX_AGENT_ITERATIONS')
+const LANGUAGE = getEnvValue('LANGUAGE')
+const shouldUseNativeOllamaPromptTools = parseEnvToBoolean('USE_NATIVE_OLLAMA_TOOLS')
+const EXPLAIN_CALLS_MESSAGE = `Before executing, briefly explain in ${LANGUAGE} what each tool call you just proposed will do. Quote each call and add one short sentence below it. Do not call tools.`
+
+const registry: Tool[] = [runShell]
+const tools: ToolDefinition[] = registry.map(t => t.def)
 const byName: Record<string, Tool> = Object.fromEntries(
-  registry.map((t) => [t.def.function.name, t]),
-);
+  registry.map(t => [t.def.function.name, t]),
+)
 
 async function dispatch(call: ToolCall): Promise<string> {
-  const tool = byName[call.function.name];
-  if (!tool) return `Unknown tool: ${call.function.name}`;
+  const tool = byName[call.function.name]
+  if (!tool)
+    return `Unknown tool: ${call.function.name}`
 
-  console.error(gray(`→ ${call.function.name}(${JSON.stringify(call.function.arguments)})`));
+  console.error(gray(`→ ${call.function.name}(${JSON.stringify(call.function.arguments)})`))
 
   return await tool
     .handler(call.function.arguments)
-    .catch((e: Error) => `ERROR: ${e.message}`);
+    .catch((e: Error) => `ERROR: ${e.message}`)
 }
 
 async function explainCalls(messages: Message[]): Promise<string> {
   const ask: Message = {
-    role: "user",
-    content: `Before executing, briefly explain in ${LANGUAGE} what each tool call you just proposed will do. Quote each call and add one short sentence below it. Do not call tools.`,
-  };
+    role: 'user',
+    content: EXPLAIN_CALLS_MESSAGE,
+  }
 
   try {
-    const explanation = await chat([...messages, ask]);
-    return explanation.content.trim();
-  } catch {
-    return "";
+    const format = shouldUseNativeOllamaPromptTools ? buildReplyFormat(tools) : undefined
+    const explanation = await chat([...messages, ask], undefined, format)
+    const raw = explanation.content.trim()
+
+    if (!shouldUseNativeOllamaPromptTools)
+      return raw
+
+    try {
+      return parsePromptToolsReply(raw).message.trim()
+    }
+    catch {
+      return raw
+    }
+  }
+  catch {
+    return ''
   }
 }
 
 async function confirmBatch(calls: ToolCall[], intent: string): Promise<ConfirmResult> {
-  const trimmed = intent.trim();
+  const trimmed = intent.trim()
   if (trimmed) {
-    console.log(`\n${yellow(trimmed)}`);
+    console.warn(`\n${yellow(trimmed)}`)
   }
 
-  console.log(bold("\nModel wants to run:"));
+  console.warn(bold(brightBlue('\nModel wants to run:')))
   for (const call of calls) {
-    console.log(`  ${cyan(call.function.name)}(${JSON.stringify(call.function.arguments)})`);
+    console.warn(` ${call.function.name}(${JSON.stringify(call.function.arguments)})`)
   }
 
-  const rl = createInterface({ input: stdin, output: stdout });
+  const rl = createInterface({ input: stdin, output: stdout })
 
   try {
-    const answer = (await rl.question("\n[y / n / type feedback] ")).trim();
-    const lowered = answer.toLowerCase();
+    const answer = (await rl.question(brightGreen('\n[y / n / type feedback] '))).trim()
+    const lowered = answer.toLowerCase()
 
-    if (lowered === "y") return { kind: "approve" };
-    if (!answer || lowered === "n" || lowered === "no") return { kind: "quit" };
+    if (lowered === 'y')
+      return { kind: 'approve' }
+    if (!answer || lowered === 'n')
+      return { kind: 'quit' }
 
-    return { kind: "replan", feedback: answer };
-  } finally {
-    rl.close();
+    return { kind: 'replan', feedback: answer }
+  }
+  finally {
+    rl.close()
   }
 }
 
 export async function run(messages: Message[]): Promise<void> {
-  for (let i = 0; i < MAX_ITERATIONS; i++) {
-    const reply = await chat(messages, tools);
-    messages.push(reply);
-
-    if (!reply.tool_calls?.length) {
-      console.log(reply.content);
-      return;
+  if (shouldUseNativeOllamaPromptTools) {
+    const instruction = buildToolsInstruction(tools)
+    const first = messages[0]
+    if (first?.role === 'system') {
+      first.content = `${first.content}\n\n${instruction}`
     }
-
-    let explanation = await explainCalls(messages);
-
-    const intent = explanation || reply.content;
-    const decision = await confirmBatch(reply.tool_calls, intent);
-
-    if (decision.kind === "quit") {
-      console.error(red("Cancelled by user."));
-      return;
-    }
-
-    if (decision.kind === "replan") {
-      for (const _ of reply.tool_calls) {
-        messages.push({ role: "tool", content: "Rejected by user. Do not run this command." });
-      }
-      messages.push({ role: "user", content: decision.feedback });
-      continue;
-    }
-
-    for (const call of reply.tool_calls) {
-      const result = await dispatch(call);
-      messages.push({ role: "tool", content: result });
+    else {
+      messages.unshift({ role: 'system', content: instruction })
     }
   }
 
-  console.error(red(`Reached MAX_ITERATIONS (${MAX_ITERATIONS}) without final answer.`));
+  for (let i = 0; i < MAX_ITERATIONS; i++) {
+    const reply = await chat(
+      messages,
+      shouldUseNativeOllamaPromptTools ? undefined : tools,
+      shouldUseNativeOllamaPromptTools ? buildReplyFormat(tools) : undefined,
+    )
+
+    if (shouldUseNativeOllamaPromptTools) {
+      try {
+        const parsed = parsePromptToolsReply(reply.content)
+        reply.content = parsed.message
+        if (parsed.tool_calls.length)
+          reply.tool_calls = parsed.tool_calls
+      }
+      catch {
+        // malformed JSON — fall through with raw content and no tool_calls
+      }
+    }
+
+    messages.push(reply)
+
+    if (!reply.tool_calls?.length) {
+      console.warn(reply.content)
+      return
+    }
+
+    const explanation = await explainCalls(messages)
+
+    const intent = explanation || reply.content
+    const decision = await confirmBatch(reply.tool_calls, intent)
+
+    if (decision.kind === 'quit') {
+      console.error(red('Cancelled by user.'))
+      return
+    }
+
+    if (decision.kind === 'replan') {
+      for (const _ of reply.tool_calls) {
+        messages.push({ role: 'tool', content: 'Rejected by user. Do not run this command.' })
+      }
+      messages.push({ role: 'user', content: decision.feedback })
+      continue
+    }
+
+    for (const call of reply.tool_calls) {
+      const result = await dispatch(call)
+      messages.push({ role: 'tool', content: result })
+    }
+  }
+
+  console.error(red(`Reached MAX_ITERATIONS (${MAX_ITERATIONS}) without final answer.`))
 }
