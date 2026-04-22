@@ -1,5 +1,5 @@
-import type { Message, OnChunk, ToolDefinition } from '../types.ts'
+import type { Message, OnStreamPart, ToolDefinition } from '../types.ts'
 
 export interface ChatProvider {
-  chat: (messages: Message[], tools: ToolDefinition[], onChunk?: OnChunk) => Promise<Message>
+  chat: (messages: Message[], tools: ToolDefinition[], onStreamPart?: OnStreamPart) => Promise<Message>
 }

@@ -4,16 +4,18 @@ export interface Message {
   role: Role
   content: string
   tool_calls?: ToolCall[]
+  tool_call_id?: string
 }
 
-export interface ChatChunk {
+export interface StreamPart {
   content?: string
   thinking?: string
 }
 
-export type OnChunk = (chunk: ChatChunk) => void
+export type OnStreamPart = (part: StreamPart) => void
 
 export interface ToolCall {
+  id?: string
   function: {
     name: string
     arguments: Record<string, unknown>
@@ -29,10 +31,10 @@ export interface ToolDefinition {
   }
 }
 
-export type ToolHandler = (args: unknown) => Promise<string>
+export type ToolHandler = (rawArguments: unknown) => Promise<string>
 
 export interface Tool {
-  def: ToolDefinition
+  definition: ToolDefinition
   handler: ToolHandler
 }
 
@@ -41,8 +43,6 @@ export const CONFIRM_KIND = {
   replan: 'replan',
   quit: 'quit',
 } as const
-
-export type ConfirmKind = (typeof CONFIRM_KIND)[keyof typeof CONFIRM_KIND]
 
 export type ConfirmResult
   = | { kind: typeof CONFIRM_KIND.approve }

@@ -1,20 +1,24 @@
 import type { Tool } from '../types.ts'
 import { spawn } from 'node:child_process'
 
-const TIMEOUT_MS = 30_000
-const OUTPUT_CAP = 20_000
+const COMMAND_TIMEOUT_MS = 30_000
+const OUTPUT_CHAR_LIMIT = 20_000
 
-function cap(s: string): string {
-  return s.length > OUTPUT_CAP ? `${s.slice(0, OUTPUT_CAP)}\n...[truncated]` : s
+function truncateOutput(output: string): string {
+  if (output.length <= OUTPUT_CHAR_LIMIT) {
+    return output
+  }
+
+  return `${output.slice(0, OUTPUT_CHAR_LIMIT)}\n...[truncated]`
 }
 
 export const runShell: Tool = {
-  def: {
+  definition: {
     type: 'function',
     function: {
       name: 'run_shell',
       description:
-        'Executes a bash command in the user\'s shell. Returns exit code, stdout, and stderr.',
+        'Executes a bash command in the user\'s shell (unsandboxed, user\'s permissions). Returns exit code, stdout, and stderr.',
       parameters: {
         type: 'object',
         properties: {
@@ -27,29 +31,39 @@ export const runShell: Tool = {
       },
     },
   },
-  handler: async (args: unknown) => {
-    if (typeof args !== 'object' || args === null || !('command' in args) || typeof (args as { command: unknown }).command !== 'string') {
+  handler: async (rawArguments: unknown) => {
+    const command = (rawArguments as { command?: unknown })?.command
+
+    if (typeof command !== 'string') {
       return 'ERROR: run_shell expects { command: string }'
     }
 
-    const { command } = args as { command: string }
-
     return await new Promise<string>((resolve) => {
-      const child = spawn('bash', ['-c', command], {
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+      const bashProcess = spawn('bash', ['-c', command], {
+        signal: AbortSignal.timeout(COMMAND_TIMEOUT_MS),
       })
 
-      let out = ''
-      let err = ''
-      child.stdout.on('data', d => (out += d))
-      child.stderr.on('data', d => (err += d))
+      bashProcess.stdout.setEncoding('utf8')
+      bashProcess.stderr.setEncoding('utf8')
+      bashProcess.stdin.end()
 
-      child.on('close', (code) => {
-        resolve(`exit=${code}\nstdout:\n${cap(out)}\nstderr:\n${cap(err)}`)
+      let collectedStdout = ''
+      let collectedStderr = ''
+
+      bashProcess.stdout.on('data', (text: string) => {
+        collectedStdout += text
       })
 
-      child.on('error', (e) => {
-        resolve(`exec_error: ${e.message}`)
+      bashProcess.stderr.on('data', (text: string) => {
+        collectedStderr += text
+      })
+
+      bashProcess.on('close', (exitCode) => {
+        resolve(`exit=${exitCode}\nstdout:\n${truncateOutput(collectedStdout)}\nstderr:\n${truncateOutput(collectedStderr)}`)
+      })
+
+      bashProcess.on('error', (error) => {
+        resolve(`exec_error: ${error.message}\nstdout:\n${truncateOutput(collectedStdout)}\nstderr:\n${truncateOutput(collectedStderr)}`)
       })
     })
   },

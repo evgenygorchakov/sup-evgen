@@ -1,13 +1,19 @@
-const RESET = '\x1B[0m'
+import process from 'node:process'
 
-function wrap(code: string): (s: string) => string {
-  return s => `\x1B[${code}m${s}${RESET}`
+const RESET_CODE = '\x1B[0m'
+const colorsEnabled = process.stderr.isTTY && !process.env.NO_COLOR
+
+function createColorizer(ansiCode: string): (text: string) => string {
+  if (!colorsEnabled) {
+    return text => text
+  }
+
+  return text => `\x1B[${ansiCode}m${text}${RESET_CODE}`
 }
 
-export const bold = wrap('1')
-export const gray = wrap('90')
-export const red = wrap('31')
-export const cyan = wrap('36')
-export const yellow = wrap('33')
-export const brightGreen = wrap('92')
-export const brightBlue = wrap('94')
+export const bold = createColorizer('1')
+export const gray = createColorizer('90')
+export const red = createColorizer('31')
+export const yellow = createColorizer('33')
+export const brightGreen = createColorizer('92')
+export const brightBlue = createColorizer('94')

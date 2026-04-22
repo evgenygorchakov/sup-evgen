@@ -1,5 +1,8 @@
 #!/usr/bin/env node
+import type { Interface as ReadlineInterface } from 'node:readline/promises'
+import type { ChatProvider } from './src/providers/types.ts'
 import type { Message } from './src/types.ts'
+
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import process, { stdin, stdout } from 'node:process'
@@ -26,23 +29,33 @@ const SYSTEM_PROMPT = [
   `Always respond in ${language}.`,
 ].join('\n')
 
-const EXIT_WORDS = new Set(['exit', 'quit', ':q'])
-const PROMPT = bold(brightGreen('> '))
+const EXIT_COMMANDS = new Set(['exit', 'quit', ':q'])
+const PROMPT_MARKER = bold(brightGreen('> '))
 
 async function loadProjectInstructions(): Promise<string | null> {
   try {
-    const path = resolve(process.cwd(), 'AGENTS.md')
-    const content = (await readFile(path, 'utf8')).trim()
-    return content || null
+    const filePath = resolve(process.cwd(), 'AGENTS.md')
+    const fileContent = (await readFile(filePath, 'utf8')).trim()
+    return fileContent || null
   }
   catch {
     return null
   }
 }
 
+async function handleUserTurn(provider: ChatProvider, messages: Message[], readline: ReadlineInterface, userInput: string): Promise<void> {
+  messages.push({ role: 'user', content: userInput })
+  await run(provider, messages, readline)
+}
+
 async function main() {
   const provider = getProvider()
-  const rl = createInterface({ input: stdin, output: stdout })
+  const readline = createInterface({ input: stdin, output: stdout })
+
+  process.once('SIGINT', () => {
+    readline.close()
+    process.exit(130)
+  })
 
   const projectInstructions = await loadProjectInstructions()
   const systemContent = projectInstructions
@@ -55,39 +68,42 @@ async function main() {
     console.warn(gray('Loaded AGENTS.md'))
   }
 
-  const firstPrompt = process.argv.slice(2).join(' ').trim()
-  if (firstPrompt) {
-    messages.push({ role: 'user', content: firstPrompt })
-    await run(provider, messages, rl)
+  const commandLinePrompt = process.argv.slice(2).join(' ').trim()
+  if (commandLinePrompt) {
+    await handleUserTurn(provider, messages, readline, commandLinePrompt)
   }
 
   console.warn(gray('\nType "exit" or press Ctrl+D to quit.'))
 
   try {
     while (true) {
-      let input: string
+      let userInput: string
+
       try {
-        input = (await rl.question(`\n${PROMPT}`)).trim()
+        userInput = (await readline.question(`\n${PROMPT_MARKER}`)).trim()
       }
+
       catch {
         break
       }
 
-      if (!input)
+      if (!userInput) {
         continue
-      if (EXIT_WORDS.has(input.toLowerCase()))
-        break
+      }
 
-      messages.push({ role: 'user', content: input })
-      await run(provider, messages, rl)
+      if (EXIT_COMMANDS.has(userInput.toLowerCase())) {
+        break
+      }
+
+      await handleUserTurn(provider, messages, readline, userInput)
     }
   }
   finally {
-    rl.close()
+    readline.close()
   }
 }
 
-main().catch((err) => {
-  console.error(err)
+main().catch((error) => {
+  console.error(error)
   process.exit(1)
 })

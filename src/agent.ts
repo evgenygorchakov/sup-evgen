@@ -1,10 +1,10 @@
 import type { Interface as ReadlineInterface } from 'node:readline/promises'
 import type { ChatProvider } from './providers/types.ts'
 import type {
-  ChatChunk,
   ConfirmResult,
   Message,
-  OnChunk,
+  OnStreamPart,
+  StreamPart,
   Tool,
   ToolCall,
   ToolDefinition,
@@ -18,38 +18,41 @@ import { CONFIRM_KIND } from './types.ts'
 import { bold, brightBlue, brightGreen, gray, red, yellow } from './utils/colors.ts'
 
 const language = Config.LANGUAGE
-const useDetailedExplanation = Config.USE_DETAILED_COMMAND_EXPLANATION
-const usePlanMode = Config.USE_PLAN_MODE
+const detailedExplanationEnabled = Config.USE_DETAILED_COMMAND_EXPLANATION
+const planModeEnabled = Config.USE_PLAN_MODE
+
+const MAX_TOOL_ITERATIONS = 10
 
 const EXPLAIN_CALLS_MESSAGE = `Before executing, briefly explain in ${language} what each tool call you just proposed will do. Quote each call and add one short sentence below it. Do not call tools.`
 const PLAN_REQUEST_MESSAGE = `Before doing anything, describe in 2-4 short sentences in ${language} what you plan to do to answer the user. Do not call tools. Wait for approval.`
 
-const registry: Tool[] = [runShell]
-const tools: ToolDefinition[] = registry.map(t => t.def)
-const byName: Record<string, Tool> = Object.fromEntries(
-  registry.map(t => [t.def.function.name, t]),
+const availableTools: Tool[] = [runShell]
+const toolDefinitions: ToolDefinition[] = availableTools.map(tool => tool.definition)
+const toolsByName: Record<string, Tool> = Object.fromEntries(
+  availableTools.map(tool => [tool.definition.function.name, tool]),
 )
 
-async function dispatch(call: ToolCall): Promise<string> {
-  const tool = byName[call.function.name]
-  if (!tool)
+async function runTool(call: ToolCall): Promise<string> {
+  const tool = toolsByName[call.function.name]
+  if (!tool) {
     return `Unknown tool: ${call.function.name}`
+  }
 
   console.error(gray(`→ ${call.function.name}(${JSON.stringify(call.function.arguments)})`))
 
   return await tool
     .handler(call.function.arguments)
-    .catch((e: Error) => `ERROR: ${e.message}`)
+    .catch((error: Error) => `ERROR: ${error.message}`)
 }
 
-async function explainCalls(provider: ChatProvider, messages: Message[]): Promise<string> {
-  const ask: Message = {
+async function askModelToExplainCalls(provider: ChatProvider, messages: Message[]): Promise<string> {
+  const explanationRequest: Message = {
     role: 'user',
     content: EXPLAIN_CALLS_MESSAGE,
   }
 
   try {
-    const explanation = await provider.chat([...messages, ask], tools)
+    const explanation = await provider.chat([...messages, explanationRequest], [])
     return explanation.content.trim()
   }
   catch {
@@ -57,62 +60,80 @@ async function explainCalls(provider: ChatProvider, messages: Message[]): Promis
   }
 }
 
-function streamingCallback(paint: (text: string) => string): { onChunk: OnChunk, streamed: () => boolean } {
-  let didStream = false
+interface StreamPrinter {
+  onStreamPart: OnStreamPart
+  didPrintAnything: () => boolean
+}
 
-  const onChunk: OnChunk = (chunk: ChatChunk) => {
-    if (chunk.content) {
-      didStream = true
-      process.stderr.write(paint(chunk.content))
+function createStreamPrinter(colorize: (text: string) => string): StreamPrinter {
+  let printedAnything = false
+  let lastPrintedKind: 'content' | 'thinking' | null = null
+
+  const onStreamPart: OnStreamPart = (part: StreamPart) => {
+    if (part.thinking) {
+      if (lastPrintedKind === 'content') {
+        process.stderr.write('\n')
+      }
+      printedAnything = true
+      lastPrintedKind = 'thinking'
+      process.stderr.write(gray(part.thinking))
+    }
+
+    if (part.content) {
+      if (lastPrintedKind === 'thinking') {
+        process.stderr.write('\n')
+      }
+      printedAnything = true
+      lastPrintedKind = 'content'
+      process.stderr.write(colorize(part.content))
     }
   }
 
-  return { onChunk, streamed: () => didStream }
+  return { onStreamPart, didPrintAnything: () => printedAnything }
 }
 
-async function planTurn(provider: ChatProvider, messages: Message[], rl: ReadlineInterface): Promise<'proceed' | 'quit'> {
+async function askForPlanApproval(provider: ChatProvider, messages: Message[], readline: ReadlineInterface): Promise<'proceed' | 'quit'> {
   while (true) {
     console.warn(bold(brightBlue('\nProposed plan:')))
 
-    const { onChunk, streamed } = streamingCallback(yellow)
+    const { onStreamPart, didPrintAnything } = createStreamPrinter(yellow)
     const plan = await provider.chat(
       [...messages, { role: 'user', content: PLAN_REQUEST_MESSAGE }],
       [],
-      onChunk,
+      onStreamPart,
     )
 
-    if (streamed()) {
+    if (didPrintAnything()) {
       process.stderr.write('\n')
     }
     else {
       const planText = plan.content.trim()
-
       if (planText) {
         console.warn(yellow(planText))
       }
     }
 
-    const answer = (await rl.question(brightGreen('\n[y / n / type feedback] '))).trim()
-    const lowered = answer.toLowerCase()
+    const userAnswer = (await readline.question(brightGreen('\n[y / n / type feedback] '))).trim()
+    const loweredAnswer = userAnswer.toLowerCase()
 
-    if (lowered === 'y') {
+    if (loweredAnswer === 'y') {
       messages.push(plan)
       return 'proceed'
     }
 
-    if (!answer || lowered === 'n') {
+    if (!userAnswer || loweredAnswer === 'n') {
       return 'quit'
     }
 
     messages.push(plan)
-    messages.push({ role: 'user', content: answer })
+    messages.push({ role: 'user', content: userAnswer })
   }
 }
 
-async function confirmBatch(calls: ToolCall[], intent: string, rl: ReadlineInterface): Promise<ConfirmResult> {
-  const trimmed = intent.trim()
-  if (trimmed) {
-    console.warn(`\n${yellow(trimmed)}`)
+async function confirmToolCalls(calls: ToolCall[], intent: string, readline: ReadlineInterface): Promise<ConfirmResult> {
+  const trimmedIntent = intent.trim()
+  if (trimmedIntent) {
+    console.warn(`\n${yellow(trimmedIntent)}`)
   }
 
   console.warn(bold(brightBlue('\nModel wants to run:')))
@@ -121,23 +142,23 @@ async function confirmBatch(calls: ToolCall[], intent: string, rl: ReadlineInter
     console.warn(` ${call.function.name}(${JSON.stringify(call.function.arguments)})`)
   }
 
-  const answer = (await rl.question(brightGreen('\n[y / n / type feedback] '))).trim()
-  const lowered = answer.toLowerCase()
+  const userAnswer = (await readline.question(brightGreen('\n[y / n / type feedback] '))).trim()
+  const loweredAnswer = userAnswer.toLowerCase()
 
-  if (lowered === 'y') {
+  if (loweredAnswer === 'y') {
     return { kind: CONFIRM_KIND.approve }
   }
 
-  if (!answer || lowered === 'n') {
+  if (!userAnswer || loweredAnswer === 'n') {
     return { kind: CONFIRM_KIND.quit }
   }
 
-  return { kind: CONFIRM_KIND.replan, feedback: answer }
+  return { kind: CONFIRM_KIND.replan, feedback: userAnswer }
 }
 
-export async function run(provider: ChatProvider, messages: Message[], rl: ReadlineInterface): Promise<void> {
-  if (usePlanMode && messages[messages.length - 1]?.role === 'user') {
-    const decision = await planTurn(provider, messages, rl)
+export async function run(provider: ChatProvider, messages: Message[], readline: ReadlineInterface): Promise<void> {
+  if (planModeEnabled && messages[messages.length - 1]?.role === 'user') {
+    const decision = await askForPlanApproval(provider, messages, readline)
 
     if (decision === 'quit') {
       console.error(red('Cancelled by user.'))
@@ -145,30 +166,38 @@ export async function run(provider: ChatProvider, messages: Message[], rl: Readl
     }
   }
 
+  let iterations = 0
+
   while (true) {
-    const { onChunk, streamed } = streamingCallback(s => s)
-    const reply = await provider.chat(messages, tools, onChunk)
+    const { onStreamPart, didPrintAnything } = createStreamPrinter(text => text)
+    const reply = await provider.chat(messages, toolDefinitions, onStreamPart)
 
     messages.push(reply)
 
     if (!reply.tool_calls?.length) {
-      if (streamed()) {
+      if (didPrintAnything()) {
         process.stderr.write('\n')
       }
-      else {
+      else if (reply.content) {
         console.warn(reply.content)
       }
       return
     }
 
-    if (streamed()) {
+    if (didPrintAnything()) {
       process.stderr.write('\n')
     }
 
-    const explanation = useDetailedExplanation ? await explainCalls(provider, messages) : ''
+    iterations += 1
+    if (iterations > MAX_TOOL_ITERATIONS) {
+      console.error(red(`Reached max tool iterations (${MAX_TOOL_ITERATIONS}). Stopping this turn.`))
+      messages.push({ role: 'user', content: `Stopped: exceeded ${MAX_TOOL_ITERATIONS} tool calls in a single turn. Summarize progress and wait for the user.` })
+      return
+    }
 
+    const explanation = detailedExplanationEnabled ? await askModelToExplainCalls(provider, messages) : ''
     const intent = explanation || reply.content
-    const decision = await confirmBatch(reply.tool_calls, intent, rl)
+    const decision = await confirmToolCalls(reply.tool_calls, intent, readline)
 
     if (decision.kind === CONFIRM_KIND.quit) {
       console.error(red('Cancelled by user.'))
@@ -176,8 +205,12 @@ export async function run(provider: ChatProvider, messages: Message[], rl: Readl
     }
 
     if (decision.kind === CONFIRM_KIND.replan) {
-      for (const _ of reply.tool_calls) {
-        messages.push({ role: 'tool', content: 'Rejected by user. Do not run this command.' })
+      for (const call of reply.tool_calls) {
+        messages.push({
+          role: 'tool',
+          content: 'Rejected by user. Do not run this command.',
+          tool_call_id: call.id,
+        })
       }
 
       messages.push({ role: 'user', content: decision.feedback })
@@ -185,8 +218,8 @@ export async function run(provider: ChatProvider, messages: Message[], rl: Readl
     }
 
     for (const call of reply.tool_calls) {
-      const result = await dispatch(call)
-      messages.push({ role: 'tool', content: result })
+      const toolResult = await runTool(call)
+      messages.push({ role: 'tool', content: toolResult, tool_call_id: call.id })
     }
   }
 }

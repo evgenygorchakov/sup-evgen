@@ -17,10 +17,3 @@
 
 - Never change `eslint.config.ts`. Always change code to fix found issues.
 - Never use `as any`.
-<!-- - Always merge type and regular import.
-
-## Testing
-
-- Always run `./scripts/format.sh` and `pnpm test`.
-- Before running `pnpm test` always run `./scripts/format.sh` and `pnpm test:types` first.
-- Run specific test by `pnpm bnt path/to/test.test.ts -t 'test name'` -->

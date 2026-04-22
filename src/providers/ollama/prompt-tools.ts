@@ -6,15 +6,15 @@ export interface PromptToolsReply {
 }
 
 export function buildToolsInstruction(tools: ToolDefinition[]): string {
-  const schemas = tools.map(t => ({
-    name: t.function.name,
-    description: t.function.description,
-    parameters: t.function.parameters,
+  const toolSchemas = tools.map(tool => ({
+    name: tool.function.name,
+    description: tool.function.description,
+    parameters: tool.function.parameters,
   }))
 
   return [
     'You have access to the following tools:',
-    JSON.stringify(schemas),
+    JSON.stringify(toolSchemas),
     '',
     'Your reply is constrained to a JSON object with two fields:',
     '- "message": natural-language text for the user (empty string if you only want to call tools).',
@@ -32,7 +32,7 @@ export function buildToolsInstruction(tools: ToolDefinition[]): string {
 }
 
 export function buildReplyFormat(tools: ToolDefinition[]): object {
-  const toolNames = tools.map(t => t.function.name)
+  const toolNames = tools.map(tool => tool.function.name)
 
   return {
     type: 'object',
@@ -54,82 +54,100 @@ export function buildReplyFormat(tools: ToolDefinition[]): object {
   }
 }
 
-export function parsePromptToolsReply(content: string): PromptToolsReply {
-  const parsed: unknown = JSON.parse(content)
+interface ToolCallEntry {
+  name: string
+  arguments: Record<string, unknown>
+}
+
+function isToolCallEntry(value: unknown): value is ToolCallEntry {
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+
+  const entry = value as { name?: unknown, arguments?: unknown }
+  return (
+    typeof entry.name === 'string'
+    && typeof entry.arguments === 'object'
+    && entry.arguments !== null
+  )
+}
+
+export function parsePromptToolsReply(jsonText: string): PromptToolsReply {
+  const parsed: unknown = JSON.parse(jsonText)
 
   if (typeof parsed !== 'object' || parsed === null) {
     throw new Error('Prompt-tools reply is not a JSON object')
   }
 
-  const obj = parsed as { message?: unknown, tool_calls?: unknown }
-  const message = typeof obj.message === 'string' ? obj.message : ''
+  const replyObject = parsed as { message?: unknown, tool_calls?: unknown }
+  const hasMessage = typeof replyObject.message === 'string'
+  const hasToolCalls = Array.isArray(replyObject.tool_calls)
 
-  if (!Array.isArray(obj.tool_calls)) {
-    return { message, tool_calls: [] }
+  if (!hasMessage && !hasToolCalls) {
+    throw new Error('Prompt-tools reply missing both "message" and "tool_calls"')
   }
 
+  const message = hasMessage ? replyObject.message as string : ''
   const tool_calls: ToolCall[] = []
-  for (const entry of obj.tool_calls) {
-    if (
-      typeof entry === 'object'
-      && entry !== null
-      && 'name' in entry
-      && 'arguments' in entry
-      && typeof (entry as { name: unknown }).name === 'string'
-      && typeof (entry as { arguments: unknown }).arguments === 'object'
-      && (entry as { arguments: unknown }).arguments !== null
-    ) {
-      const e = entry as { name: string, arguments: Record<string, unknown> }
-      tool_calls.push({ function: { name: e.name, arguments: e.arguments } })
+
+  if (hasToolCalls) {
+    for (const entry of replyObject.tool_calls as unknown[]) {
+      if (isToolCallEntry(entry)) {
+        tool_calls.push({ function: { name: entry.name, arguments: entry.arguments } })
+      }
     }
   }
 
   return { message, tool_calls }
 }
 
-function tryOnce(raw: string): PromptToolsReply | null {
+function tryParseReply(jsonText: string): PromptToolsReply | null {
   try {
-    return parsePromptToolsReply(raw)
+    return parsePromptToolsReply(jsonText)
   }
   catch {
     return null
   }
 }
 
-// Find the first balanced {...} block, respecting string literals and escapes.
-function extractFirstJsonObject(content: string): string | null {
-  let depth = 0
-  let start = -1
-  let inString = false
-  let escape = false
+// Find the first balanced {...} block, respecting "..." string literals.
+function extractFirstJsonObject(text: string): string | null {
+  let braceDepth = 0
+  let objectStartIndex = -1
+  let insideStringLiteral = false
+  let nextCharacterIsEscaped = false
 
-  for (let i = 0; i < content.length; i++) {
-    const ch = content[i]
+  for (let index = 0; index < text.length; index++) {
+    const character = text[index]
 
-    if (inString) {
-      if (escape)
-        escape = false
-      else if (ch === '\\')
-        escape = true
-      else if (ch === '"')
-        inString = false
+    if (insideStringLiteral) {
+      if (nextCharacterIsEscaped) {
+        nextCharacterIsEscaped = false
+      }
+      else if (character === '\\') {
+        nextCharacterIsEscaped = true
+      }
+      else if (character === '"') {
+        insideStringLiteral = false
+      }
       continue
     }
 
-    if (ch === '"') {
-      inString = true
+    if (character === '"') {
+      insideStringLiteral = true
       continue
     }
 
-    if (ch === '{') {
-      if (depth === 0)
-        start = i
-      depth++
+    if (character === '{') {
+      if (braceDepth === 0) {
+        objectStartIndex = index
+      }
+      braceDepth++
     }
-    else if (ch === '}') {
-      depth--
-      if (depth === 0 && start !== -1) {
-        return content.slice(start, i + 1)
+    else if (character === '}') {
+      braceDepth--
+      if (braceDepth === 0 && objectStartIndex !== -1) {
+        return text.slice(objectStartIndex, index + 1)
       }
     }
   }
@@ -137,32 +155,17 @@ function extractFirstJsonObject(content: string): string | null {
   return null
 }
 
-export function tryParsePromptToolsReply(content: string): PromptToolsReply | null {
-  const strict = tryOnce(content)
-
-  if (strict) {
-    return strict
+export function tryParsePromptToolsReply(modelReply: string): PromptToolsReply | null {
+  const strictParse = tryParseReply(modelReply)
+  if (strictParse) {
+    return strictParse
   }
 
-  const trimmed = content.trim()
-  const firstBrace = trimmed.indexOf('{')
-  const lastBrace = trimmed.lastIndexOf('}')
-
-  if (firstBrace !== -1 && lastBrace > firstBrace) {
-    const sliced = tryOnce(trimmed.slice(firstBrace, lastBrace + 1))
-
-    if (sliced) {
-      return sliced
-    }
-  }
-
-  const balanced = extractFirstJsonObject(content)
-
-  if (balanced) {
-    const parsed = tryOnce(balanced)
-
-    if (parsed) {
-      return parsed
+  const extractedObject = extractFirstJsonObject(modelReply)
+  if (extractedObject) {
+    const fallbackParse = tryParseReply(extractedObject)
+    if (fallbackParse) {
+      return fallbackParse
     }
   }
 

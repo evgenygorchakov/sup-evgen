@@ -1,9 +1,12 @@
+const THINKING_MODELS = new Set(['qwen3.5:35b', 'qwen3.6', 'qwen3.5:9b'])
+
 export const Config = {
   PROVIDER: 'ollama',
   HOST: 'http://host.docker.internal:11434',
   // MODEL: 'gpt-oss',
   // MODEL: 'qwen3.5:35b',
   MODEL: 'qwen3.6',
+  // MODEL: 'qwen3.5:9b',
   LANGUAGE: 'russian',
   USE_PLAN_MODE: false,
   USE_DETAILED_COMMAND_EXPLANATION: true,
@@ -12,7 +15,9 @@ export const Config = {
   USE_STREAMING: true,
 } as const
 
-export function useThink(model: string): boolean | string {
+export type ThinkingMode = false | true | 'low' | 'medium' | 'high'
+
+export function getThinkingModeFor(model: string): ThinkingMode {
   if (!Config.USE_THINKING) {
     return false
   }
@@ -21,5 +26,5 @@ export function useThink(model: string): boolean | string {
     return 'high'
   }
 
-  return ['qwen3.5:35b', 'qwen3.6'].includes(model)
+  return THINKING_MODELS.has(model)
 }

@@ -1,127 +1,55 @@
-import type { Message, OnChunk, ToolCall, ToolDefinition } from '../../types.ts'
-import { Config, useThink } from '../../config.ts'
+import type { Message, OnStreamPart, Role, ToolCall, ToolDefinition } from '../../types.ts'
+import { Config, getThinkingModeFor } from '../../config.ts'
 
-const HOST = Config.HOST
-const MODEL = Config.MODEL
+const OLLAMA_HOST = Config.HOST
+const OLLAMA_MODEL = Config.MODEL
 const REQUEST_TIMEOUT_MS = 300_000
 
-export async function chat(
-  messages: Message[],
-  tools?: ToolDefinition[],
-  format?: object,
-  onChunk?: OnChunk,
-): Promise<Message> {
-  const stream = Boolean(onChunk) && Config.USE_STREAMING
+const VALID_ROLES: readonly Role[] = ['system', 'user', 'assistant', 'tool']
 
-  const res = await fetch(`${HOST}/api/chat`, {
+export interface ChatOptions {
+  tools?: ToolDefinition[]
+  format?: object
+  onStreamPart?: OnStreamPart
+}
+
+export async function chat(messages: Message[], options: ChatOptions = {}): Promise<Message> {
+  const { tools, format, onStreamPart } = options
+  const shouldStream = Boolean(onStreamPart) && Config.USE_STREAMING
+
+  const response = await fetch(`${OLLAMA_HOST}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: MODEL,
+      model: OLLAMA_MODEL,
       messages,
       tools,
       format,
-      think: useThink(MODEL),
-      stream,
+      think: getThinkingModeFor(OLLAMA_MODEL),
+      stream: shouldStream,
     }),
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   })
 
-  if (!res.ok) {
-    throw new Error(`Ollama HTTP ${res.status}: ${await res.text()}`)
+  if (!response.ok) {
+    throw new Error(`Ollama HTTP ${response.status}: ${await response.text()}`)
   }
 
-  if (!stream) {
-    const data: unknown = await res.json()
+  if (!shouldStream) {
+    const responseBody: unknown = await response.json()
+    const responseMessage = (responseBody as { message?: unknown })?.message
 
-    if (typeof data !== 'object' || data === null || !('message' in data) || typeof (data as { message: unknown }).message !== 'object') {
+    if (!responseMessage || typeof responseMessage !== 'object') {
       throw new Error('Ollama returned unexpected response shape')
     }
 
-    return (data as { message: Message }).message
+    return responseMessage as Message
   }
 
-  return await readStream(res, onChunk!)
+  return await readStreamingResponse(response, onStreamPart!)
 }
 
-async function readStream(res: Response, onChunk: OnChunk): Promise<Message> {
-  if (!res.body) {
-    throw new Error('Ollama stream has no body')
-  }
-
-  const reader = res.body.getReader()
-  const decoder = new TextDecoder('utf-8')
-  let buffer = ''
-
-  const assembled: Message = { role: 'assistant', content: '' }
-  let thinking = ''
-
-  while (true) {
-    const { value, done } = await reader.read()
-
-    if (done)
-      break
-
-    buffer += decoder.decode(value, { stream: true })
-
-    let newlineIndex = buffer.indexOf('\n')
-    while (newlineIndex !== -1) {
-      const line = buffer.slice(0, newlineIndex).trim()
-      buffer = buffer.slice(newlineIndex + 1)
-      newlineIndex = buffer.indexOf('\n')
-
-      if (!line)
-        continue
-
-      const parsed = parseLine(line)
-      if (!parsed)
-        continue
-
-      if (parsed.error) {
-        throw new Error(`Ollama stream error: ${parsed.error}`)
-      }
-
-      if (parsed.message) {
-        const m = parsed.message
-
-        if (typeof m.role === 'string') {
-          assembled.role = m.role as Message['role']
-        }
-
-        if (typeof m.content === 'string' && m.content.length > 0) {
-          assembled.content += m.content
-          onChunk({ content: m.content })
-        }
-
-        if (typeof m.thinking === 'string' && m.thinking.length > 0) {
-          thinking += m.thinking
-          onChunk({ thinking: m.thinking })
-        }
-
-        if (Array.isArray(m.tool_calls) && m.tool_calls.length > 0) {
-          assembled.tool_calls = m.tool_calls as ToolCall[]
-        }
-      }
-
-      if (parsed.done) {
-        return assembled
-      }
-    }
-  }
-
-  const tail = buffer.trim()
-  if (tail) {
-    const parsed = parseLine(tail)
-    if (parsed?.message?.content && typeof parsed.message.content === 'string') {
-      assembled.content += parsed.message.content
-      onChunk({ content: parsed.message.content })
-    }
-  }
-
-  return assembled
-}
-
-interface StreamLine {
+interface StreamedLine {
   message?: {
     role?: unknown
     content?: unknown
@@ -132,12 +60,95 @@ interface StreamLine {
   error?: string
 }
 
-function parseLine(line: string): StreamLine | null {
+function mergeLineIntoMessage(line: StreamedLine, accumulated: Message, onStreamPart: OnStreamPart): void {
+  if (line.error) {
+    throw new Error(`Ollama stream error: ${line.error}`)
+  }
+
+  const partial = line.message
+  if (!partial) {
+    return
+  }
+
+  if (typeof partial.role === 'string' && (VALID_ROLES as readonly string[]).includes(partial.role)) {
+    accumulated.role = partial.role as Role
+  }
+
+  if (typeof partial.content === 'string' && partial.content.length > 0) {
+    accumulated.content += partial.content
+    onStreamPart({ content: partial.content })
+  }
+
+  if (typeof partial.thinking === 'string' && partial.thinking.length > 0) {
+    onStreamPart({ thinking: partial.thinking })
+  }
+
+  if (Array.isArray(partial.tool_calls) && partial.tool_calls.length > 0) {
+    accumulated.tool_calls = partial.tool_calls as ToolCall[]
+  }
+}
+
+async function readStreamingResponse(response: Response, onStreamPart: OnStreamPart): Promise<Message> {
+  if (!response.body) {
+    throw new Error('Ollama stream has no body')
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder('utf-8')
+  let buffer = ''
+
+  const accumulatedMessage: Message = { role: 'assistant', content: '' }
+
+  while (true) {
+    const { value: bytes, done } = await reader.read()
+
+    if (done) {
+      break
+    }
+
+    buffer += decoder.decode(bytes, { stream: true })
+
+    let newlineIndex = buffer.indexOf('\n')
+    while (newlineIndex !== -1) {
+      const rawLine = buffer.slice(0, newlineIndex).trim()
+      buffer = buffer.slice(newlineIndex + 1)
+      newlineIndex = buffer.indexOf('\n')
+
+      if (!rawLine) {
+        continue
+      }
+
+      const parsedLine = parseJsonLine(rawLine)
+      if (!parsedLine) {
+        continue
+      }
+
+      mergeLineIntoMessage(parsedLine, accumulatedMessage, onStreamPart)
+
+      if (parsedLine.done) {
+        return accumulatedMessage
+      }
+    }
+  }
+
+  const remainingLine = buffer.trim()
+  if (remainingLine) {
+    const parsedLine = parseJsonLine(remainingLine)
+    if (parsedLine) {
+      mergeLineIntoMessage(parsedLine, accumulatedMessage, onStreamPart)
+    }
+  }
+
+  return accumulatedMessage
+}
+
+function parseJsonLine(rawLine: string): StreamedLine | null {
   try {
-    const parsed: unknown = JSON.parse(line)
-    if (typeof parsed !== 'object' || parsed === null)
+    const parsed: unknown = JSON.parse(rawLine)
+    if (typeof parsed !== 'object' || parsed === null) {
       return null
-    return parsed as StreamLine
+    }
+    return parsed as StreamedLine
   }
   catch {
     return null
