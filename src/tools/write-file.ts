@@ -73,4 +73,5 @@ export const writeFile: Tool = {
 
     return `${overwrite ? 'Overwrote' : 'Wrote'} ${Buffer.byteLength(content, 'utf8')} bytes to ${path}`
   },
+  primaryArgs: ['path', 'overwrite'],
 }

@@ -70,4 +70,13 @@ export const readFile: Tool = {
 
     return `Showing lines ${offset}-${lastShown} of ${lines.length}${suffix}:\n${truncateText(numbered)}`
   },
+  primaryArgs: ['path', 'offset', 'limit'],
+  renderResult: (_args, result) => {
+    const match = result.match(/^Showing lines \d+-\d+ of (\d+)/)
+    if (match) {
+      return `Read ${match[1]} lines`
+    }
+
+    return result
+  },
 }

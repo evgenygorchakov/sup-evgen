@@ -58,4 +58,29 @@ export const runShell: Tool = {
       })
     })
   },
+  primaryArgs: ['command'],
+  renderResult: (_args, result) => {
+    const exitMatch = result.match(/^exit=(-?\d+)\nstdout:\n([\s\S]*?)\nstderr:\n([\s\S]*)$/)
+    if (!exitMatch) {
+      return result
+    }
+
+    const [, exitCode, stdout, stderr] = exitMatch
+    const trimmedStdout = stdout.trim()
+    const trimmedStderr = stderr.trim()
+    if (exitCode === '0') {
+      return trimmedStdout || '(no output)'
+    }
+
+    const parts: string[] = [`exit=${exitCode}`]
+    if (trimmedStdout) {
+      parts.push(trimmedStdout)
+    }
+
+    if (trimmedStderr) {
+      parts.push(`stderr: ${trimmedStderr}`)
+    }
+
+    return parts.join('\n')
+  },
 }

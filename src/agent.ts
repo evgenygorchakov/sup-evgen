@@ -9,15 +9,16 @@ import type {
   ToolCall,
   ToolDefinition,
 } from './types.ts'
-
 import process from 'node:process'
-import { Config } from './config.ts'
 
+import { Config } from './config.ts'
 import { editFile } from './tools/edit-file.ts'
+
 import { readFile } from './tools/read-file.ts'
 import { runShell } from './tools/run-shell.ts'
 import { writeFile } from './tools/write-file.ts'
 import { CONFIRM_KIND } from './types.ts'
+import { renderToolHeader, renderToolResult } from './ui/render-tool-call.ts'
 import { bold, brightBlue, brightGreen, gray, red, yellow } from './utils/colors.ts'
 
 const language = Config.LANGUAGE
@@ -39,14 +40,19 @@ const toolsByName: Record<string, Tool> = Object.fromEntries(
 async function runTool(call: ToolCall): Promise<string> {
   const tool = toolsByName[call.function.name]
   if (!tool) {
-    return `Unknown tool: ${call.function.name}`
+    const message = `Unknown tool: ${call.function.name}`
+    console.error(red(`  ⎿  ${message}`))
+
+    return message
   }
 
-  console.error(gray(`→ ${call.function.name}(${JSON.stringify(call.function.arguments)})`))
-
-  return await tool
+  const result = await tool
     .handler(call.function.arguments)
     .catch((error: Error) => `ERROR: ${error.message}`)
+
+  console.error(renderToolResult(tool, call, result))
+
+  return result
 }
 
 async function askModelToExplainCalls(provider: ChatProvider, messages: Message[]): Promise<string> {
@@ -159,7 +165,7 @@ async function confirmToolCalls(calls: ToolCall[], intent: string, readline: Rea
   console.warn(bold(brightBlue('\nModel wants to run:')))
 
   for (const call of calls) {
-    console.warn(` ${call.function.name}(${JSON.stringify(call.function.arguments)})`)
+    console.warn(renderToolHeader(call, toolsByName[call.function.name]))
   }
 
   const userAnswer = (await readline.question(brightGreen('\n[y / n / type feedback] '))).trim()

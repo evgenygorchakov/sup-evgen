@@ -36,6 +36,8 @@ export type ToolHandler = (rawArguments: unknown) => Promise<string>
 export interface Tool {
   definition: ToolDefinition
   handler: ToolHandler
+  primaryArgs?: readonly string[]
+  renderResult?: (args: Record<string, unknown>, result: string) => string
 }
 
 export const CONFIRM_KIND = {

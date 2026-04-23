@@ -78,4 +78,14 @@ export const editFile: Tool = {
 
     return `Edited ${path}`
   },
+  primaryArgs: ['path'],
+  renderResult: (args, _result) => {
+    const path = typeof args.path === 'string' ? args.path : '?'
+    const find = typeof args.find === 'string' ? args.find : ''
+    const replaceWith = typeof args.replaceWith === 'string' ? args.replaceWith : ''
+    const minus = find.split('\n').map(line => `- ${line}`).join('\n')
+    const plus = replaceWith.split('\n').map(line => `+ ${line}`).join('\n')
+
+    return `Updated ${path}\n${minus}\n${plus}`
+  },
 }

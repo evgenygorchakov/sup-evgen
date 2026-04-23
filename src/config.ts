@@ -12,8 +12,9 @@ export const Config = {
   USE_DETAILED_COMMAND_EXPLANATION: false,
   USE_NATIVE_OLLAMA_TOOLS: false,
   USE_THINKING: true,
-  SHOW_THINKING: true,
+  SHOW_THINKING: false,
   USE_STREAMING: true,
+  VERBOSE_TOOL_OUTPUT: false,
 } as const
 
 export type ThinkingMode = false | true | 'low' | 'medium' | 'high'
