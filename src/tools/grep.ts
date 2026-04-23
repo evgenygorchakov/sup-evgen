@@ -1,22 +1,13 @@
 import type { Tool } from '../types.ts'
 import { spawn, spawnSync } from 'node:child_process'
-import { readdir, readFile as readFromDisk, stat } from 'node:fs/promises'
-import { basename, join, relative } from 'node:path'
+import { readFile as readFromDisk, stat } from 'node:fs/promises'
+import { basename, relative } from 'node:path'
 import process from 'node:process'
-import { resolveInsideWorkingDirectory, truncateText } from './shared.ts'
+import { resolveInsideWorkingDirectory, truncateText, walkFiles } from './shared.ts'
 
 const SEARCH_TIMEOUT_MS = 30_000
 const MAX_FILE_BYTES = 5 * 1024 * 1024
 const PREVIEW_MATCH_COUNT = 10
-const IGNORED_DIRECTORY_NAMES = new Set([
-  '.git',
-  'node_modules',
-  'dist',
-  'build',
-  '.next',
-  'out',
-  'coverage',
-])
 
 const ripgrepAvailable = (() => {
   try {
@@ -88,34 +79,6 @@ async function searchWithRipgrep(
       resolveResult(`ERROR: ${error.message}`)
     })
   })
-}
-
-async function* walkFiles(start: string): AsyncGenerator<string> {
-  const stats = await stat(start).catch(() => null)
-  if (!stats) {
-    return
-  }
-  if (stats.isFile()) {
-    yield start
-    return
-  }
-  if (!stats.isDirectory()) {
-    return
-  }
-
-  const entries = await readdir(start, { withFileTypes: true }).catch(() => [])
-  for (const entry of entries) {
-    if (IGNORED_DIRECTORY_NAMES.has(entry.name)) {
-      continue
-    }
-    const fullPath = join(start, entry.name)
-    if (entry.isDirectory()) {
-      yield* walkFiles(fullPath)
-    }
-    else if (entry.isFile()) {
-      yield fullPath
-    }
-  }
 }
 
 async function searchWithNode(
