@@ -13,11 +13,12 @@ import process from 'node:process'
 
 import { Config } from './config.ts'
 import { editFile } from './tools/edit-file.ts'
-
+import { fetchUrl } from './tools/fetch-url.ts'
 import { glob } from './tools/glob.ts'
 import { grep } from './tools/grep.ts'
 import { readFile } from './tools/read-file.ts'
 import { runShell } from './tools/run-shell.ts'
+import { webSearch } from './tools/web-search.ts'
 import { writeFile } from './tools/write-file.ts'
 import { CONFIRM_KIND } from './types.ts'
 import { renderToolHeader, renderToolResult } from './ui/render-tool-call.ts'
@@ -33,7 +34,7 @@ const MAX_TOOL_ITERATIONS = 10
 const EXPLAIN_CALLS_MESSAGE = `Before executing, briefly explain in ${language} what each tool call you just proposed will do. Quote each call and add one short sentence below it. Do not call tools.`
 const PLAN_REQUEST_MESSAGE = `Before doing anything, describe in 2-4 short sentences in ${language} what you plan to do to answer the user. Do not call tools. Wait for approval.`
 
-const availableTools: Tool[] = [runShell, readFile, writeFile, editFile, grep, glob]
+const availableTools: Tool[] = [runShell, readFile, writeFile, editFile, grep, glob, webSearch, fetchUrl]
 const toolDefinitions: ToolDefinition[] = availableTools.map(tool => tool.definition)
 const toolsByName: Record<string, Tool> = Object.fromEntries(
   availableTools.map(tool => [tool.definition.function.name, tool]),

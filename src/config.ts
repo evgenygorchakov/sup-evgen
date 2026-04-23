@@ -12,9 +12,12 @@ export const Config = {
   USE_DETAILED_COMMAND_EXPLANATION: false,
   USE_NATIVE_OLLAMA_TOOLS: false,
   USE_THINKING: true,
-  SHOW_THINKING: false,
+  SHOW_THINKING: true,
   USE_STREAMING: true,
   VERBOSE_TOOL_OUTPUT: false,
+  WEB_SEARCH_MAX_RESULTS: 5,
+  FETCH_URL_MAX_BYTES: 200_000,
+  FETCH_URL_TIMEOUT_MS: 15_000,
 } as const
 
 export type ThinkingMode = false | true | 'low' | 'medium' | 'high'
