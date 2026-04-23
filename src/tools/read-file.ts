@@ -2,17 +2,9 @@ import type { Tool } from '../types.ts'
 import { readFile as readFromDisk } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import process from 'node:process'
+import { truncateText } from './shared.ts'
 
-const OUTPUT_CHAR_LIMIT = 20_000
 const DEFAULT_LIMIT = 2000
-
-function truncate(text: string) {
-  if (text.length <= OUTPUT_CHAR_LIMIT) {
-    return text
-  }
-
-  return `${text.slice(0, OUTPUT_CHAR_LIMIT)}\n...[truncated]`
-}
 
 export const readFile: Tool = {
   definition: {
@@ -73,8 +65,9 @@ export const readFile: Tool = {
     const numbered = chunk
       .map((line, index) => `${String(offset + index).padStart(6, ' ')}\t${line}`)
       .join('\n')
+
     const suffix = lastShown < lines.length ? '' : ' (end of file)'
 
-    return `Showing lines ${offset}-${lastShown} of ${lines.length}${suffix}:\n${truncate(numbered)}`
+    return `Showing lines ${offset}-${lastShown} of ${lines.length}${suffix}:\n${truncateText(numbered)}`
   },
 }

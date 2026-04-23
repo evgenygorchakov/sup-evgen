@@ -1,0 +1,81 @@
+import type { Tool } from '../types.ts'
+import { readFile as readFromDisk, writeFile as writeToDisk } from 'node:fs/promises'
+import { resolveInsideWorkingDirectory } from './shared.ts'
+
+export const editFile: Tool = {
+  definition: {
+    type: 'function',
+    function: {
+      name: 'edit_file',
+      description: 'Edits a UTF-8 text file by replacing a single unique substring. The find string must appear exactly once in the file. Confined to the current working directory.',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: {
+            type: 'string',
+            description: 'Path to the file. Relative paths resolve from the current working directory.',
+          },
+          find: {
+            type: 'string',
+            description: 'Substring to find. Must be unique in the file and not empty.',
+          },
+          replaceWith: {
+            type: 'string',
+            description: 'String to replace the found substring with.',
+          },
+        },
+        required: ['path', 'find', 'replaceWith'],
+      },
+    },
+  },
+  handler: async (rawArguments: unknown) => {
+    const args = (rawArguments ?? {}) as { path?: unknown, find?: unknown, replaceWith?: unknown }
+    const path = args.path
+    const find = args.find
+    const replaceWith = args.replaceWith
+
+    if (typeof path !== 'string' || typeof find !== 'string' || typeof replaceWith !== 'string') {
+      return 'ERROR: edit_file expects { path: string, find: string, replaceWith: string }'
+    }
+
+    if (find.length === 0) {
+      return 'ERROR: find must not be empty'
+    }
+
+    const resolved = resolveInsideWorkingDirectory(path)
+    if (!resolved.ok) {
+      return `ERROR: ${resolved.error}`
+    }
+
+    let content: string
+
+    try {
+      content = await readFromDisk(resolved.absolute, 'utf8')
+    }
+    catch (error) {
+      return `ERROR: ${(error as Error).message}`
+    }
+
+    const occurrences = content.split(find).length - 1
+
+    if (occurrences === 0) {
+      return `ERROR: find not found in ${path}`
+    }
+
+    if (occurrences > 1) {
+      return `ERROR: find matches ${occurrences} places in ${path}; make it unique by adding surrounding context`
+    }
+
+    const index = content.indexOf(find)
+    const updated = content.slice(0, index) + replaceWith + content.slice(index + find.length)
+
+    try {
+      await writeToDisk(resolved.absolute, updated, 'utf8')
+    }
+    catch (error) {
+      return `ERROR: ${(error as Error).message}`
+    }
+
+    return `Edited ${path}`
+  },
+}

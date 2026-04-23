@@ -1,8 +1,8 @@
 import type { Tool } from '../types.ts'
 import { Buffer } from 'node:buffer'
 import { mkdir, stat, writeFile as writeToDisk } from 'node:fs/promises'
-import { dirname, resolve, sep } from 'node:path'
-import process from 'node:process'
+import { dirname } from 'node:path'
+import { resolveInsideWorkingDirectory } from './shared.ts'
 
 async function fileExists(absolute: string): Promise<boolean> {
   try {
@@ -14,18 +14,12 @@ async function fileExists(absolute: string): Promise<boolean> {
   }
 }
 
-function isInsideCwd(absolute: string): boolean {
-  const cwd = process.cwd()
-  return absolute === cwd || absolute.startsWith(cwd + sep)
-}
-
 export const writeFile: Tool = {
   definition: {
     type: 'function',
     function: {
       name: 'write_file',
-      description:
-          'Writes UTF-8 text to a file. Creates missing parent directories. Refuses to overwrite existing files unless overwrite is true. Confined to the current working directory.',
+      description: 'Writes UTF-8 text to a file. Creates missing parent directories. Refuses to overwrite existing files unless overwrite is true. Confined to the current working directory.',
       parameters: {
         type: 'object',
         properties: {
@@ -60,19 +54,18 @@ export const writeFile: Tool = {
       return 'ERROR: write_file expects content to be a string'
     }
 
-    const absolute = resolve(process.cwd(), path)
-
-    if (!isInsideCwd(absolute)) {
-      return `ERROR: path "${path}" is outside the current working directory`
+    const resolved = resolveInsideWorkingDirectory(path)
+    if (!resolved.ok) {
+      return `ERROR: ${resolved.error}`
     }
 
-    if (!overwrite && await fileExists(absolute)) {
+    if (!overwrite && await fileExists(resolved.absolute)) {
       return `ERROR: file "${path}" already exists; pass overwrite: true to replace it`
     }
 
     try {
-      await mkdir(dirname(absolute), { recursive: true })
-      await writeToDisk(absolute, content, 'utf8')
+      await mkdir(dirname(resolved.absolute), { recursive: true })
+      await writeToDisk(resolved.absolute, content, 'utf8')
     }
     catch (error) {
       return `ERROR: ${(error as Error).message}`

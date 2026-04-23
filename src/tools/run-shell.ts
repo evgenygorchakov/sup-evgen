@@ -1,24 +1,15 @@
 import type { Tool } from '../types.ts'
 import { spawn } from 'node:child_process'
+import { truncateText } from './shared.ts'
 
 const COMMAND_TIMEOUT_MS = 30_000
-const OUTPUT_CHAR_LIMIT = 20_000
-
-function truncateOutput(output: string): string {
-  if (output.length <= OUTPUT_CHAR_LIMIT) {
-    return output
-  }
-
-  return `${output.slice(0, OUTPUT_CHAR_LIMIT)}\n...[truncated]`
-}
 
 export const runShell: Tool = {
   definition: {
     type: 'function',
     function: {
       name: 'run_shell',
-      description:
-        'Executes a bash command in the user\'s shell (unsandboxed, user\'s permissions). Returns exit code, stdout, and stderr.',
+      description: 'Executes a bash command in the user\'s shell (unsandboxed, user\'s permissions). Returns exit code, stdout, and stderr.',
       parameters: {
         type: 'object',
         properties: {
@@ -59,11 +50,11 @@ export const runShell: Tool = {
       })
 
       bashProcess.on('close', (exitCode) => {
-        resolve(`exit=${exitCode}\nstdout:\n${truncateOutput(collectedStdout)}\nstderr:\n${truncateOutput(collectedStderr)}`)
+        resolve(`exit=${exitCode}\nstdout:\n${truncateText(collectedStdout)}\nstderr:\n${truncateText(collectedStderr)}`)
       })
 
       bashProcess.on('error', (error) => {
-        resolve(`exec_error: ${error.message}\nstdout:\n${truncateOutput(collectedStdout)}\nstderr:\n${truncateOutput(collectedStderr)}`)
+        resolve(`exec_error: ${error.message}\nstdout:\n${truncateText(collectedStdout)}\nstderr:\n${truncateText(collectedStderr)}`)
       })
     })
   },

@@ -13,6 +13,7 @@ import type {
 import process from 'node:process'
 import { Config } from './config.ts'
 
+import { editFile } from './tools/edit-file.ts'
 import { readFile } from './tools/read-file.ts'
 import { runShell } from './tools/run-shell.ts'
 import { writeFile } from './tools/write-file.ts'
@@ -28,7 +29,7 @@ const MAX_TOOL_ITERATIONS = 10
 const EXPLAIN_CALLS_MESSAGE = `Before executing, briefly explain in ${language} what each tool call you just proposed will do. Quote each call and add one short sentence below it. Do not call tools.`
 const PLAN_REQUEST_MESSAGE = `Before doing anything, describe in 2-4 short sentences in ${language} what you plan to do to answer the user. Do not call tools. Wait for approval.`
 
-const availableTools: Tool[] = [runShell, readFile, writeFile]
+const availableTools: Tool[] = [runShell, readFile, writeFile, editFile]
 const toolDefinitions: ToolDefinition[] = availableTools.map(tool => tool.definition)
 const toolsByName: Record<string, Tool> = Object.fromEntries(
   availableTools.map(tool => [tool.definition.function.name, tool]),
@@ -76,6 +77,7 @@ function createStreamPrinter(colorize: (text: string) => string): StreamPrinter 
       if (lastPrintedKind === 'content') {
         process.stderr.write('\n')
       }
+
       printedAnything = true
       lastPrintedKind = 'thinking'
       process.stderr.write(gray(part.thinking))
@@ -85,6 +87,7 @@ function createStreamPrinter(colorize: (text: string) => string): StreamPrinter 
       if (lastPrintedKind === 'thinking') {
         process.stderr.write('\n')
       }
+
       printedAnything = true
       lastPrintedKind = 'content'
       process.stderr.write(colorize(part.content))
