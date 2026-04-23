@@ -1,7 +1,9 @@
 import type { Message, OnStreamPart, ToolDefinition } from '../../types.ts'
 import type { ChatProvider } from '../types.ts'
 
+import process from 'node:process'
 import { Config } from '../../config.ts'
+import { gray } from '../../utils/colors.ts'
 import { chat as rawChat } from './chat.ts'
 import { buildReplyFormat, buildToolsInstruction, tryParsePromptToolsReply } from './prompt-tools.ts'
 
@@ -23,16 +25,21 @@ function prependToolsInstruction(messages: Message[], instruction: string): Mess
   return [{ role: 'system', content: instruction }, ...messages]
 }
 
-// In prompt-tools mode the model's content is raw JSON, so streaming it part-by-part
-// would just show braces and quotes. We still forward thinking parts so the user sees
-// chain-of-thought while the JSON body accumulates silently.
 function filterOnlyThinkingParts(onStreamPart?: OnStreamPart): OnStreamPart | undefined {
   if (!onStreamPart) {
     return undefined
   }
+
+  let announced = false
+
   return (part) => {
     if (part.thinking) {
       onStreamPart(part)
+    }
+
+    if (part.content && !announced) {
+      announced = true
+      process.stderr.write(gray('\nComposing reply…\n'))
     }
   }
 }
@@ -61,9 +68,11 @@ async function chat(messages: Message[], tools: ToolDefinition[], onStreamPart?:
     return firstReply
   }
 
+  process.stderr.write(gray('\nPrevious reply was malformed, retrying…\n'))
+
   const retryReply = await rawChat(
     [...messagesWithInstruction, firstReply, { role: 'user', content: REFORMAT_INSTRUCTION }],
-    { format: replySchema },
+    { format: replySchema, onStreamPart: filterOnlyThinkingParts(onStreamPart) },
   )
   const parsedRetryReply = tryParsePromptToolsReply(retryReply.content)
 

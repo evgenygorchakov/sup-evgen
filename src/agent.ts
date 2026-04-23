@@ -23,6 +23,7 @@ import { bold, brightBlue, brightGreen, gray, red, yellow } from './utils/colors
 const language = Config.LANGUAGE
 const detailedExplanationEnabled = Config.USE_DETAILED_COMMAND_EXPLANATION
 const planModeEnabled = Config.USE_PLAN_MODE
+const showThinking = Config.SHOW_THINKING
 
 const MAX_TOOL_ITERATIONS = 10
 
@@ -66,19 +67,30 @@ async function askModelToExplainCalls(provider: ChatProvider, messages: Message[
 interface StreamPrinter {
   onStreamPart: OnStreamPart
   didPrintAnything: () => boolean
+  didPrintContent: () => boolean
 }
 
 function createStreamPrinter(colorize: (text: string) => string): StreamPrinter {
-  let printedAnything = false
+  let printedContent = false
+  let printedThinking = false
   let lastPrintedKind: 'content' | 'thinking' | null = null
+  let hinted = false
 
   const onStreamPart: OnStreamPart = (part: StreamPart) => {
     if (part.thinking) {
+      if (!showThinking) {
+        if (!hinted) {
+          hinted = true
+          printedThinking = true
+          process.stderr.write(gray('(thinking…)\n'))
+        }
+        return
+      }
+
       if (lastPrintedKind === 'content') {
         process.stderr.write('\n')
       }
-
-      printedAnything = true
+      printedThinking = true
       lastPrintedKind = 'thinking'
       process.stderr.write(gray(part.thinking))
     }
@@ -87,14 +99,17 @@ function createStreamPrinter(colorize: (text: string) => string): StreamPrinter 
       if (lastPrintedKind === 'thinking') {
         process.stderr.write('\n')
       }
-
-      printedAnything = true
+      printedContent = true
       lastPrintedKind = 'content'
       process.stderr.write(colorize(part.content))
     }
   }
 
-  return { onStreamPart, didPrintAnything: () => printedAnything }
+  return {
+    onStreamPart,
+    didPrintAnything: () => printedContent || printedThinking,
+    didPrintContent: () => printedContent,
+  }
 }
 
 async function askForPlanApproval(provider: ChatProvider, messages: Message[], readline: ReadlineInterface): Promise<'proceed' | 'quit'> {
@@ -174,7 +189,7 @@ export async function run(provider: ChatProvider, messages: Message[], readline:
   let iterations = 0
 
   while (true) {
-    const { onStreamPart, didPrintAnything } = createStreamPrinter(text => text)
+    const { onStreamPart, didPrintAnything, didPrintContent } = createStreamPrinter(text => text)
     const reply = await provider.chat(messages, toolDefinitions, onStreamPart)
 
     messages.push(reply)
@@ -183,9 +198,11 @@ export async function run(provider: ChatProvider, messages: Message[], readline:
       if (didPrintAnything()) {
         process.stderr.write('\n')
       }
-      else if (reply.content) {
+
+      if (!didPrintContent() && reply.content) {
         console.warn(reply.content)
       }
+
       return
     }
 
