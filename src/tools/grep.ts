@@ -221,4 +221,5 @@ export const grep: Tool = {
 
     return `${header}\n${preview}${remainder}`
   },
+  autoApprove: true,
 }

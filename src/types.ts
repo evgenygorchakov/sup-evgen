@@ -38,6 +38,7 @@ export interface Tool {
   handler: ToolHandler
   primaryArgs?: readonly string[]
   renderResult?: (args: Record<string, unknown>, result: string) => string
+  autoApprove?: boolean
 }
 
 export const CONFIRM_KIND = {

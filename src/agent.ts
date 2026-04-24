@@ -58,6 +58,34 @@ async function runTool(call: ToolCall): Promise<string> {
   return result
 }
 
+const SHELL_METACHARACTERS_PATTERN = /[;|&<>`$\n]/
+
+function containsShellMetacharacters(command: string): boolean {
+  return SHELL_METACHARACTERS_PATTERN.test(command)
+}
+
+function isShellCommandAutoApprovable(command: string): boolean {
+  const trimmed = command.trim()
+  if (containsShellMetacharacters(trimmed)) {
+    return false
+  }
+  return Config.AUTO_APPROVE_SHELL_PATTERNS.some(pattern => pattern.test(trimmed))
+}
+
+function canAutoApproveCall(call: ToolCall): boolean {
+  const tool = toolsByName[call.function.name]
+  if (!tool) {
+    return false
+  }
+  if (tool.definition.function.name === 'run_shell') {
+    const command = typeof call.function.arguments?.command === 'string'
+      ? call.function.arguments.command
+      : ''
+    return isShellCommandAutoApprovable(command)
+  }
+  return tool.autoApprove === true
+}
+
 async function askModelToExplainCalls(provider: ChatProvider, messages: Message[]): Promise<string> {
   const explanationRequest: Message = {
     role: 'user',
@@ -226,26 +254,35 @@ export async function run(provider: ChatProvider, messages: Message[], readline:
       return
     }
 
-    const explanation = detailedExplanationEnabled ? await askModelToExplainCalls(provider, messages) : ''
-    const intent = explanation || reply.content
-    const decision = await confirmToolCalls(reply.tool_calls, intent, readline)
+    const canAutoApproveBatch = Config.USE_PERMISSION_ALLOWLIST && reply.tool_calls.every(canAutoApproveCall)
 
-    if (decision.kind === CONFIRM_KIND.quit) {
-      console.error(red('Cancelled by user.'))
-      return
-    }
-
-    if (decision.kind === CONFIRM_KIND.replan) {
+    if (canAutoApproveBatch) {
       for (const call of reply.tool_calls) {
-        messages.push({
-          role: 'tool',
-          content: 'Rejected by user. Do not run this command.',
-          tool_call_id: call.id,
-        })
+        console.warn(renderToolHeader(call, toolsByName[call.function.name]))
+      }
+    }
+    else {
+      const explanation = detailedExplanationEnabled ? await askModelToExplainCalls(provider, messages) : ''
+      const intent = explanation || reply.content
+      const decision = await confirmToolCalls(reply.tool_calls, intent, readline)
+
+      if (decision.kind === CONFIRM_KIND.quit) {
+        console.error(red('Cancelled by user.'))
+        return
       }
 
-      messages.push({ role: 'user', content: decision.feedback })
-      continue
+      if (decision.kind === CONFIRM_KIND.replan) {
+        for (const call of reply.tool_calls) {
+          messages.push({
+            role: 'tool',
+            content: 'Rejected by user. Do not run this command.',
+            tool_call_id: call.id,
+          })
+        }
+
+        messages.push({ role: 'user', content: decision.feedback })
+        continue
+      }
     }
 
     for (const call of reply.tool_calls) {

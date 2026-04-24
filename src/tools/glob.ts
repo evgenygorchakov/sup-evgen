@@ -137,4 +137,5 @@ export const glob: Tool = {
 
     return `${header}\n${preview}${remainder}`
   },
+  autoApprove: true,
 }

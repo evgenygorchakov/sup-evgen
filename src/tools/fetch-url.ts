@@ -115,6 +115,7 @@ export const fetchUrl: Tool = {
 
     return `${header}\n${previewLines}`
   },
+  autoApprove: true,
 }
 
 async function readBoundedText(response: Response, byteLimit: number): Promise<{ text: string, bytesRead: number, truncated: boolean }> {

@@ -79,4 +79,5 @@ export const readFile: Tool = {
 
     return result
   },
+  autoApprove: true,
 }

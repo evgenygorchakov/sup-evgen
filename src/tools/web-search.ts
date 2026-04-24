@@ -74,4 +74,5 @@ export const webSearch: Tool = {
 
     return `${header}\n${preview}${remainder}`
   },
+  autoApprove: true,
 }
