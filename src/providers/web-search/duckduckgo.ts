@@ -6,19 +6,28 @@ export interface WebSearchResult {
   snippet: string
 }
 
-const DUCKDUCKGO_HTML_ENDPOINT = 'https://html.duckduckgo.com/html/'
+const DUCKDUCKGO_LITE_ENDPOINT = 'https://lite.duckduckgo.com/lite/'
 const USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64) sup-evgen/0.1'
 const SEARCH_TIMEOUT_MS = 15_000
+
+const ANOMALY_MARKERS = [
+  'Unfortunately, bots use DuckDuckGo too',
+  'anomaly-modal',
+  'anomaly.js',
+]
 
 export async function searchDuckDuckGo(query: string, maxResults: number): Promise<WebSearchResult[]> {
   const requestBody = new URLSearchParams({ q: query })
 
-  const response = await fetch(DUCKDUCKGO_HTML_ENDPOINT, {
+  const response = await fetch(DUCKDUCKGO_LITE_ENDPOINT, {
     method: 'POST',
     headers: {
       'User-Agent': USER_AGENT,
       'Content-Type': 'application/x-www-form-urlencoded',
-      'Accept': 'text/html',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Referer': 'https://lite.duckduckgo.com/',
+      'DNT': '1',
     },
     body: requestBody,
     signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS),
@@ -34,17 +43,25 @@ export async function searchDuckDuckGo(query: string, maxResults: number): Promi
 }
 
 function extractResultsFromHtml(html: string, maxResults: number): WebSearchResult[] {
-  const titleAndHrefPattern = /<a\b[^>]*\bclass="[^"]*\bresult__a\b[^"]*"[^>]*\bhref="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g
-  const snippetPattern = /<a\b[^>]*\bclass="[^"]*\bresult__snippet\b[^"]*"[^>]*>([\s\S]*?)<\/a>/g
+  const linkPattern = /<a\b[^>]*\bclass="[^"]*\bresult-link\b[^"]*"[^>]*\bhref="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g
+  const snippetPattern = /<td\b[^>]*\bclass="[^"]*\bresult-snippet\b[^"]*"[^>]*>([\s\S]*?)<\/td>/g
 
-  const titleMatches = [...html.matchAll(titleAndHrefPattern)]
+  const linkMatches = [...html.matchAll(linkPattern)]
   const snippetMatches = [...html.matchAll(snippetPattern)]
+
+  if (linkMatches.length === 0) {
+    const isAnomalyPage = ANOMALY_MARKERS.some(marker => html.includes(marker))
+    if (isAnomalyPage) {
+      throw new Error('DuckDuckGo blocked the request with anti-bot protection (anomaly/captcha page). Retry later or switch network.')
+    }
+    return []
+  }
 
   const results: WebSearchResult[] = []
 
-  for (let index = 0; index < titleMatches.length && results.length < maxResults; index += 1) {
-    const rawHref = titleMatches[index]![1]!
-    const rawTitle = titleMatches[index]![2]!
+  for (let index = 0; index < linkMatches.length && results.length < maxResults; index += 1) {
+    const rawHref = linkMatches[index]![1]!
+    const rawTitle = linkMatches[index]![2]!
     const rawSnippet = snippetMatches[index]?.[1] ?? ''
 
     const realUrl = decodeRedirectHref(rawHref)
