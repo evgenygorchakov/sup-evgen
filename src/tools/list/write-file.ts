@@ -2,6 +2,7 @@ import type { Tool } from '../../types.ts'
 import { Buffer } from 'node:buffer'
 import { mkdir, stat, writeFile as writeToDisk } from 'node:fs/promises'
 import { dirname } from 'node:path'
+import { blue } from '../../utils/colors.ts'
 import { resolveInsideWorkingDirectory } from './shared.ts'
 
 async function fileExists(absolute: string): Promise<boolean> {
@@ -74,4 +75,5 @@ export const writeFile: Tool = {
     return `${overwrite ? 'Overwrote' : 'Wrote'} ${Buffer.byteLength(content, 'utf8')} bytes to ${path}`
   },
   primaryArgs: ['path', 'overwrite'],
+  accentColor: blue,
 }

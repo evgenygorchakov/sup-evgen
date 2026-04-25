@@ -1,5 +1,6 @@
 import type { Tool } from '../../types.ts'
 import { spawn } from 'node:child_process'
+import { yellow } from '../../utils/colors.ts'
 import { truncateText } from './shared.ts'
 
 const COMMAND_TIMEOUT_MS = 30_000
@@ -59,6 +60,7 @@ export const runShell: Tool = {
     })
   },
   primaryArgs: ['command'],
+  accentColor: yellow,
   renderResult: (_args, result) => {
     const exitMatch = result.match(/^exit=(-?\d+)\nstdout:\n([\s\S]*?)\nstderr:\n([\s\S]*)$/)
     if (!exitMatch) {

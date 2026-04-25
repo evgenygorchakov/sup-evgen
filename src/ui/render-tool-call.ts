@@ -35,7 +35,8 @@ function renderArgs(tool: Tool | undefined, args: Record<string, unknown>): stri
 }
 
 export function renderToolHeader(call: ToolCall, tool: Tool | undefined): string {
-  return bold(yellow(`● ${call.function.name}(${renderArgs(tool, call.function.arguments)})`))
+  const colorize = tool?.accentColor ?? yellow
+  return `${colorize('●')} ${bold(`${call.function.name}(${renderArgs(tool, call.function.arguments)})`)}`
 }
 
 function withLeafPrefix(text: string): string {

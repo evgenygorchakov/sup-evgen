@@ -30,6 +30,7 @@ export interface Tool {
   definition: ToolDefinition
   handler: ToolHandler
   primaryArgs?: readonly string[]
+  accentColor?: (text: string) => string
   renderResult?: (args: Record<string, unknown>, result: string) => string
   autoApprove?: boolean
 }

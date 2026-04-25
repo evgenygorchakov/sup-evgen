@@ -2,6 +2,7 @@ import type { Tool } from '../../types.ts'
 import { readFile as readFromDisk } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import process from 'node:process'
+import { green } from '../../utils/colors.ts'
 import { truncateText } from './shared.ts'
 
 const DEFAULT_LIMIT = 2000
@@ -71,6 +72,7 @@ export const readFile: Tool = {
     return `Showing lines ${offset}-${lastShown} of ${lines.length}${suffix}:\n${truncateText(numbered)}`
   },
   primaryArgs: ['path', 'offset', 'limit'],
+  accentColor: green,
   renderResult: (_args, result) => {
     const match = result.match(/^Showing lines \d+-\d+ of (\d+)/)
     if (match) {

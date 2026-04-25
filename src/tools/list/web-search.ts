@@ -1,5 +1,6 @@
 import type { Tool } from '../../types.ts'
 import { Config } from '../../config.ts'
+import { cyan } from '../../utils/colors.ts'
 import { truncateText } from './shared.ts'
 import { searchDuckDuckGo } from './web-search/duckduckgo.ts'
 
@@ -51,6 +52,7 @@ export const webSearch: Tool = {
     return truncateText(formatted)
   },
   primaryArgs: ['query', 'maxResults'],
+  accentColor: cyan,
   renderResult: (args, result) => {
     if (result.startsWith('No results')) {
       return result

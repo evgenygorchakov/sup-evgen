@@ -1,6 +1,7 @@
 import type { Tool } from '../../types.ts'
 import { Buffer } from 'node:buffer'
 import { Config } from '../../config.ts'
+import { cyan } from '../../utils/colors.ts'
 import { htmlToText } from '../../utils/html-to-text.ts'
 import { isPrivateHost } from '../../utils/private-host.ts'
 import { truncateText } from './shared.ts'
@@ -91,6 +92,7 @@ export const fetchUrl: Tool = {
     return truncateText(header + text)
   },
   primaryArgs: ['url'],
+  accentColor: cyan,
   renderResult: (args, result) => {
     const url = typeof args.url === 'string' ? args.url : ''
     let hostname = url

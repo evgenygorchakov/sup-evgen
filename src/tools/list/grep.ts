@@ -3,6 +3,7 @@ import { spawn, spawnSync } from 'node:child_process'
 import { readFile as readFromDisk, stat } from 'node:fs/promises'
 import { basename, relative } from 'node:path'
 import process from 'node:process'
+import { green } from '../../utils/colors.ts'
 import { resolveInsideWorkingDirectory, truncateText, walkFiles } from './shared.ts'
 
 const SEARCH_TIMEOUT_MS = 30_000
@@ -197,6 +198,7 @@ export const grep: Tool = {
     return truncateText(result)
   },
   primaryArgs: ['pattern', 'path', 'glob', 'caseSensitive'],
+  accentColor: green,
   renderResult: (_args, result) => {
     if (result.startsWith('No matches')) {
       const firstLineEnd = result.indexOf('\n')

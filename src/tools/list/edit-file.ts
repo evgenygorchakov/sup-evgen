@@ -1,5 +1,6 @@
 import type { Tool } from '../../types.ts'
 import { readFile as readFromDisk, writeFile as writeToDisk } from 'node:fs/promises'
+import { blue } from '../../utils/colors.ts'
 import { resolveInsideWorkingDirectory } from './shared.ts'
 
 export const editFile: Tool = {
@@ -79,6 +80,7 @@ export const editFile: Tool = {
     return `Edited ${path}`
   },
   primaryArgs: ['path'],
+  accentColor: blue,
   renderResult: (args, _result) => {
     const path = typeof args.path === 'string' ? args.path : '?'
     const find = typeof args.find === 'string' ? args.find : ''

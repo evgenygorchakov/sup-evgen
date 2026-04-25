@@ -1,6 +1,7 @@
 import type { Tool } from '../../types.ts'
 import { relative } from 'node:path'
 import process from 'node:process'
+import { green } from '../../utils/colors.ts'
 import { resolveInsideWorkingDirectory, truncateText, walkFiles } from './shared.ts'
 
 const PREVIEW_FILE_COUNT = 10
@@ -122,6 +123,7 @@ export const glob: Tool = {
     return truncateText(matches.join('\n'))
   },
   primaryArgs: ['pattern', 'path'],
+  accentColor: green,
   renderResult: (_args, result) => {
     if (result.startsWith('No files')) {
       const firstLineEnd = result.indexOf('\n')
