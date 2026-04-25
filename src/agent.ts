@@ -63,7 +63,7 @@ export async function run(provider: ChatProvider, messages: Message[], readline:
       }
     }
     else {
-      const decision = await confirmToolCalls(provider, messages, reply.tool_calls, reply.content, readline)
+      const decision = await confirmToolCalls(reply.tool_calls, reply.content, readline)
 
       if (decision.kind === CONFIRM_KIND.quit) {
         console.error(red('Cancelled by user.'))

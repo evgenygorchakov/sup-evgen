@@ -9,7 +9,6 @@ export const Config = {
   MODEL: 'qwen3.6',
   LANGUAGE: 'russian',
   USE_PLAN_MODE: false,
-  USE_DETAILED_COMMAND_EXPLANATION: false,
   USE_NATIVE_OLLAMA_TOOLS: true,
   USE_THINKING: true,
   SHOW_THINKING: true,

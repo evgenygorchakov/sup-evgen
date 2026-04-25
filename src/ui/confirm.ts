@@ -1,8 +1,6 @@
 import type { Interface as ReadlineInterface } from 'node:readline/promises'
-import type { ChatProvider } from '../providers/types.ts'
-import type { Message, ToolCall } from '../types.ts'
+import type { ToolCall } from '../types.ts'
 
-import { Config } from '../config.ts'
 import { toolsByName } from '../tools/registry.ts'
 import { bold, brightBlue, brightGreen, yellow } from '../utils/colors.ts'
 import { renderToolHeader } from './render-tool-call.ts'
@@ -18,28 +16,8 @@ export type ConfirmResult
     | { kind: typeof CONFIRM_KIND.replan, feedback: string }
     | { kind: typeof CONFIRM_KIND.quit }
 
-const EXPLAIN_CALLS_MESSAGE = `Before executing, briefly explain in ${Config.LANGUAGE} what each tool call you just proposed will do. Quote each call and add one short sentence below it. Do not call tools.`
-
-async function askModelToExplainCalls(provider: ChatProvider, messages: Message[]): Promise<string> {
-  const explanationRequest: Message = {
-    role: 'user',
-    content: EXPLAIN_CALLS_MESSAGE,
-  }
-
-  try {
-    const explanation = await provider.chat([...messages, explanationRequest], [])
-    return explanation.content.trim()
-  }
-  catch {
-    return ''
-  }
-}
-
-export async function confirmToolCalls(provider: ChatProvider, messages: Message[], calls: ToolCall[], fallbackIntent: string, readline: ReadlineInterface): Promise<ConfirmResult> {
-  const explanation = Config.USE_DETAILED_COMMAND_EXPLANATION
-    ? await askModelToExplainCalls(provider, messages)
-    : ''
-  const intent = (explanation || fallbackIntent).trim()
+export async function confirmToolCalls(calls: ToolCall[], fallbackIntent: string, readline: ReadlineInterface): Promise<ConfirmResult> {
+  const intent = fallbackIntent.trim()
 
   if (intent) {
     console.warn(`\n${yellow(intent)}`)
