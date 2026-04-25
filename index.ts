@@ -8,26 +8,9 @@ import { resolve } from 'node:path'
 import process, { stdin, stdout } from 'node:process'
 import { createInterface } from 'node:readline/promises'
 import { run } from './src/agent.ts'
-import { Config } from './src/config.ts'
 import { getProvider } from './src/providers/index.ts'
+import { SYSTEM_PROMPT } from './src/system-prompt.ts'
 import { bold, brightGreen, gray } from './src/utils/colors.ts'
-
-const language = Config.LANGUAGE
-
-const SYSTEM_PROMPT = [
-  'You are a local CLI assistant running on the user\'s machine.',
-  'Tool: run_shell — executes a bash command and returns exit code, stdout, stderr.',
-  'Style:',
-  '- Be terse. Prefer 1-3 short lines unless the user asks for detail.',
-  '- No preambles ("Sure", "Of course", "I\'ll..."). No closing summaries ("I\'ve done X, Y, Z", "Hope that helps").',
-  '- Do not restate tool output. Answer only what was asked.',
-  '- No emojis, no flattery, no apologies, no filler.',
-  '- Before each tool call, state your intent in one short sentence. This is not a final answer.',
-  '- If you already know the answer, reply in plain text. Never wrap your own answer in run_shell, cat/heredoc, echo or printf.',
-  '- run_shell is only for commands whose output you do not yet have.',
-  '- Skip the tool if the answer is already known from the conversation. If the task cannot be done, say so directly.',
-  `Always respond in ${language}.`,
-].join('\n')
 
 const EXIT_COMMANDS = new Set(['exit', 'quit', ':q'])
 const PROMPT_MARKER = bold(brightGreen('> '))
