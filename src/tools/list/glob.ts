@@ -1,4 +1,4 @@
-import type { Tool } from '../types.ts'
+import type { Tool } from '../../types.ts'
 import { relative } from 'node:path'
 import process from 'node:process'
 import { resolveInsideWorkingDirectory, truncateText, walkFiles } from './shared.ts'
@@ -10,7 +10,7 @@ function globToRegex(glob: string): RegExp {
   let index = 0
 
   while (index < glob.length) {
-    const char = glob[index]
+    const char = glob[index]!
 
     if (char === '*') {
       if (glob[index + 1] === '*') {

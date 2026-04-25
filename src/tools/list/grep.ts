@@ -1,4 +1,4 @@
-import type { Tool } from '../types.ts'
+import type { Tool } from '../../types.ts'
 import { spawn, spawnSync } from 'node:child_process'
 import { readFile as readFromDisk, stat } from 'node:fs/promises'
 import { basename, relative } from 'node:path'

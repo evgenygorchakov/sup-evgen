@@ -1,4 +1,4 @@
-import type { Tool } from '../types.ts'
+import type { Tool } from '../../types.ts'
 import { spawn } from 'node:child_process'
 import { truncateText } from './shared.ts'
 
@@ -65,7 +65,9 @@ export const runShell: Tool = {
       return result
     }
 
-    const [, exitCode, stdout, stderr] = exitMatch
+    const exitCode = exitMatch[1]!
+    const stdout = exitMatch[2]!
+    const stderr = exitMatch[3]!
     const trimmedStdout = stdout.trim()
     const trimmedStderr = stderr.trim()
     if (exitCode === '0') {

@@ -1,7 +1,7 @@
-import type { Tool } from '../types.ts'
-import { Config } from '../config.ts'
-import { searchDuckDuckGo } from '../providers/web-search/duckduckgo.ts'
+import type { Tool } from '../../types.ts'
+import { Config } from '../../config.ts'
 import { truncateText } from './shared.ts'
+import { searchDuckDuckGo } from './web-search/duckduckgo.ts'
 
 const PREVIEW_RESULT_COUNT = 5
 

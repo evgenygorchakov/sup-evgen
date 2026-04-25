@@ -1,7 +1,7 @@
 import process from 'node:process'
 
 const RESET_CODE = '\x1B[0m'
-const colorsEnabled = process.stderr.isTTY && !process.env.NO_COLOR
+const colorsEnabled = process.stderr.isTTY
 
 function createColorizer(ansiCode: string): (text: string) => string {
   if (!colorsEnabled) {

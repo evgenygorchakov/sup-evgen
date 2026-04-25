@@ -1,7 +1,8 @@
-import type { Tool } from '../types.ts'
+import type { Tool } from '../../types.ts'
 import { Buffer } from 'node:buffer'
-import { Config } from '../config.ts'
-import { htmlToText, isPrivateHost } from '../utils/html-to-text.ts'
+import { Config } from '../../config.ts'
+import { htmlToText } from '../../utils/html-to-text.ts'
+import { isPrivateHost } from '../../utils/private-host.ts'
 import { truncateText } from './shared.ts'
 
 const USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64) sup-evgen/0.1'

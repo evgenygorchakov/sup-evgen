@@ -1,4 +1,4 @@
-import type { Tool } from '../types.ts'
+import type { Tool } from '../../types.ts'
 import { Buffer } from 'node:buffer'
 import { mkdir, stat, writeFile as writeToDisk } from 'node:fs/promises'
 import { dirname } from 'node:path'

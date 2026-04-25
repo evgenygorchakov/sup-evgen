@@ -1,4 +1,5 @@
-import type { Message, OnStreamPart, Role, ToolCall, ToolDefinition } from '../../types.ts'
+import type { Message, Role, ToolCall, ToolDefinition } from '../../types.ts'
+import type { OnStreamPart } from '../../ui/stream-printer.ts'
 import { Config, getThinkingModeFor } from '../../config.ts'
 
 const OLLAMA_HOST = Config.HOST

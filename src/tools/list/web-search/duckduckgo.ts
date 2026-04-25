@@ -1,4 +1,4 @@
-import { htmlToText } from '../../utils/html-to-text.ts'
+import { htmlToText } from '../../../utils/html-to-text.ts'
 
 export interface WebSearchResult {
   title: string
@@ -43,8 +43,8 @@ export async function searchDuckDuckGo(query: string, maxResults: number): Promi
 }
 
 function extractResultsFromHtml(html: string, maxResults: number): WebSearchResult[] {
-  const linkPattern = /<a\b[^>]*\bclass="[^"]*\bresult-link\b[^"]*"[^>]*\bhref="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g
-  const snippetPattern = /<td\b[^>]*\bclass="[^"]*\bresult-snippet\b[^"]*"[^>]*>([\s\S]*?)<\/td>/g
+  const linkPattern = /<a\s[^>]*class="[^"]*\bresult-link\b[^"]*"[^>]*\shref="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g
+  const snippetPattern = /<td\s[^>]*class="[^"]*\bresult-snippet\b[^"]*"[^>]*>([\s\S]*?)<\/td>/g
 
   const linkMatches = [...html.matchAll(linkPattern)]
   const snippetMatches = [...html.matchAll(snippetPattern)]

@@ -7,13 +7,6 @@ export interface Message {
   tool_call_id?: string
 }
 
-export interface StreamPart {
-  content?: string
-  thinking?: string
-}
-
-export type OnStreamPart = (part: StreamPart) => void
-
 export interface ToolCall {
   id?: string
   function: {
@@ -40,14 +33,3 @@ export interface Tool {
   renderResult?: (args: Record<string, unknown>, result: string) => string
   autoApprove?: boolean
 }
-
-export const CONFIRM_KIND = {
-  approve: 'approve',
-  replan: 'replan',
-  quit: 'quit',
-} as const
-
-export type ConfirmResult
-  = | { kind: typeof CONFIRM_KIND.approve }
-    | { kind: typeof CONFIRM_KIND.replan, feedback: string }
-    | { kind: typeof CONFIRM_KIND.quit }

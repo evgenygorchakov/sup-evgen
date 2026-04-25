@@ -1,4 +1,4 @@
-import type { Tool } from '../types.ts'
+import type { Tool } from '../../types.ts'
 import { readFile as readFromDisk, writeFile as writeToDisk } from 'node:fs/promises'
 import { resolveInsideWorkingDirectory } from './shared.ts'
 

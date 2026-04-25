@@ -1,4 +1,5 @@
-import type { Message, OnStreamPart, ToolDefinition } from '../../types.ts'
+import type { Message, ToolDefinition } from '../../types.ts'
+import type { OnStreamPart } from '../../ui/stream-printer.ts'
 import type { ChatProvider } from '../types.ts'
 
 import process from 'node:process'

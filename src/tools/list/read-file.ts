@@ -1,4 +1,4 @@
-import type { Tool } from '../types.ts'
+import type { Tool } from '../../types.ts'
 import { readFile as readFromDisk } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import process from 'node:process'
