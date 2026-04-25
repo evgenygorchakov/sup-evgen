@@ -8,16 +8,13 @@ A minimal local CLI assistant. It sends a prompt to a local [Ollama](https://oll
 2. Download a model
 3. Clone the repository and open the project
 4. Change `src/config.ts` if needed (e.g., to select the downloaded model)
-
 5.
 ```bash
 npm link
 ```
 
-## Usage
-```bash
-sup Make review this code
-```
+## Usage. For example model: qwen3.6 with thinking high mode:
+https://github.com/user-attachments/assets/ef41b487-df7d-4b33-a0af-47c0d67cbfb1
 
 ## Pros
 
